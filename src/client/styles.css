@@ -1,0 +1,201 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/*
+ * One shared theme. Components use semantic tokens only (bg-surface, text-ink,
+ * text-accent ...), never raw palette utilities, so light and dark swap here.
+ * Radius scale: control 8px, button 10px, card 14px, ticket 18px.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --bg: oklch(0.982 0.003 275);
+  --surface: oklch(0.997 0.001 275);
+  --surface-2: oklch(0.955 0.004 275);
+  --surface-3: oklch(0.925 0.005 275);
+  --line: oklch(0.89 0.005 275);
+  --line-strong: oklch(0.8 0.007 275);
+  --ink: oklch(0.2 0.012 275);
+  --ink-2: oklch(0.43 0.012 275);
+  --ink-3: oklch(0.53 0.01 275);
+  --accent: oklch(0.53 0.2 18);
+  --accent-ink: oklch(0.99 0.004 18);
+  --accent-soft: oklch(0.95 0.025 18);
+  --accent-line: oklch(0.83 0.08 18);
+  --success: oklch(0.48 0.12 152);
+  --success-soft: oklch(0.95 0.035 152);
+  --warning: oklch(0.5 0.11 70);
+  --warning-soft: oklch(0.96 0.04 85);
+  --danger: oklch(0.5 0.17 32);
+  --danger-soft: oklch(0.95 0.03 32);
+  --shadow-ambient: 0 1px 2px oklch(0.2 0.02 275 / 0.06);
+  --shadow-raised: 0 1px 2px oklch(0.2 0.02 275 / 0.06), 0 8px 24px -8px oklch(0.2 0.02 275 / 0.12);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(0.165 0.008 275);
+  --surface: oklch(0.205 0.009 275);
+  --surface-2: oklch(0.245 0.01 275);
+  --surface-3: oklch(0.285 0.011 275);
+  --line: oklch(0.3 0.01 275);
+  --line-strong: oklch(0.4 0.012 275);
+  --ink: oklch(0.955 0.004 275);
+  --ink-2: oklch(0.76 0.01 275);
+  --ink-3: oklch(0.66 0.01 275);
+  --accent: oklch(0.68 0.18 18);
+  --accent-ink: oklch(0.17 0.02 18);
+  --accent-soft: oklch(0.29 0.06 18);
+  --accent-line: oklch(0.45 0.11 18);
+  --success: oklch(0.76 0.13 152);
+  --success-soft: oklch(0.28 0.05 152);
+  --warning: oklch(0.8 0.12 80);
+  --warning-soft: oklch(0.3 0.05 80);
+  --danger: oklch(0.74 0.14 32);
+  --danger-soft: oklch(0.3 0.06 32);
+  --shadow-ambient: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-raised: 0 1px 2px oklch(0 0 0 / 0.35), 0 12px 32px -12px oklch(0 0 0 / 0.6);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --radius-control: 8px;
+  --radius-button: 10px;
+  --radius-card: 14px;
+  --radius-ticket: 18px;
+  --shadow-ambient: var(--shadow-ambient);
+  --shadow-raised: var(--shadow-raised);
+  --ease-out: var(--ease-out);
+}
+
+html {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pressable feedback. Gated so touch taps do not leave sticky hover states. */
+@utility press {
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* The order ticket's perforation: two notches and a dashed tear line. */
+@utility perforation {
+  position: relative;
+  border-top: 1.5px dashed var(--line-strong);
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    top: -11px;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--bg);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  &::before {
+    left: -11px;
+    clip-path: inset(0 0 0 50%);
+  }
+  &::after {
+    right: -11px;
+    clip-path: inset(0 50% 0 0);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@utility skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-control);
+}
+
+@utility rise {
+  animation: rise 320ms var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+  .skeleton {
+    animation: none;
+  }
+  .press:active:not(:disabled) {
+    transform: none;
+  }
+}
