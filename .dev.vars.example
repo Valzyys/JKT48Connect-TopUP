@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit real values.
+MYPG_API_KEY=replace-me
+# The `id` query value of the OkeConnect catalog URL.
+OKECONNECT_CATALOG_ID=replace-me
+# Bearer token for /api/admin/* and the /admin page. Use 32+ random characters.
+ADMIN_TOKEN=replace-me
