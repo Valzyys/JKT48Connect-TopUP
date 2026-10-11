@@ -4,7 +4,7 @@ import { buildDest, findGame } from "../../shared/games";
 import { AppError, type AppContext } from "../context";
 import { getFulfillment, getOrderById, getOrderByRef, getPayment, rateLimit } from "../db";
 import { ORDER_REF_PATTERN, sha256Hex } from "../lib/ids";
-import { catalogMeta, gameProducts, gameSummaries, toOffer } from "../services/catalog";
+import { catalogMeta, gameSummaries } from "../services/catalog";
 import { checkFulfillment } from "../services/fulfillment";
 import { lookupNickname } from "../services/nickname";
 import { authorizeOrder, checkPayment, createOrder, ensureInvoice, requestCancel } from "../services/orders";
@@ -34,7 +34,7 @@ async function orderView(ctx: AppContext, orderId: string): Promise<OrderView> {
 export const publicRoutes = new Hono<Vars>()
   .get("/games", async (c) => {
     const ctx = c.get("ctx");
-    const res: GamesResponse = { catalog: await catalogMeta(ctx.db, ctx.config, ctx.now()), games: await gameSummaries(ctx.db, ctx.config) };
+    const res: GamesResponse = { catalog: await catalogMeta(ctx.db, ctx.config, ctx.now()), games: await gameSummaries(ctx.db, ctx.config, ctx.now()) };
     c.header("Cache-Control", "public, max-age=30");
     return c.json(res);
   })
@@ -43,11 +43,10 @@ export const publicRoutes = new Hono<Vars>()
     const ctx = c.get("ctx");
     const game = findGame(c.req.param("slug"));
     if (!game) throw new AppError(404, "game_not_found", "Game tidak ditemukan.");
-    const summary = (await gameSummaries(ctx.db, ctx.config)).find((g) => g.slug === game.slug)!;
-    const products = (await gameProducts(ctx.db, game.slug)).map((r) => toOffer(r, ctx.config)).filter((p) => p !== null);
+    const { products, ...summary } = (await gameSummaries(ctx.db, ctx.config, ctx.now())).find((g) => g.slug === game.slug)!;
     const res: GameDetailResponse = {
       catalog: await catalogMeta(ctx.db, ctx.config, ctx.now()),
-      game: { ...summary, userId: game.userId, zone: game.zone },
+      game: { ...summary, products, userId: game.userId, zone: game.zone },
       products,
     };
     c.header("Cache-Control", "public, max-age=30");

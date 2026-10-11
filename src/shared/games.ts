@@ -27,13 +27,11 @@ export interface GameConfig {
   zone: GameField | null;
   currency: string; // in-game currency name, used in copy
   nicknameProduct: string | null;
-  hue: number; // OKLCH hue for the generated poster
-  icon: "sword" | "fire" | "crosshair" | "shield";
   tagline: string;
   /**
    * Official key art, e.g. "/games/mobile-legends.webp" placed in /public.
-   * Null until licensed artwork is supplied; the storefront then renders a
-   * generated poster from `hue` and `icon` instead.
+   * Null until licensed artwork is supplied; the storefront is typographic
+   * and does not need it.
    */
   image: string | null;
 }
@@ -48,8 +46,6 @@ export const GAMES: GameConfig[] = [
     zone: { label: "Zone ID", hint: "Angka di dalam tanda kurung.", pattern: "^\\d{2,8}$", inputMode: "numeric", maxLength: 8 },
     currency: "Diamonds",
     nicknameProduct: "CEKML",
-    hue: 255,
-    icon: "sword",
     tagline: "MOBA 5v5",
     image: null,
   },
@@ -62,8 +58,6 @@ export const GAMES: GameConfig[] = [
     zone: null,
     currency: "Diamonds",
     nicknameProduct: "CEKFF",
-    hue: 50,
-    icon: "fire",
     tagline: "Battle royale",
     image: null,
   },
@@ -76,8 +70,6 @@ export const GAMES: GameConfig[] = [
     zone: null,
     currency: "CP",
     nicknameProduct: "CEKCODM",
-    hue: 150,
-    icon: "crosshair",
     tagline: "FPS",
     image: null,
   },
@@ -90,8 +82,6 @@ export const GAMES: GameConfig[] = [
     zone: null,
     currency: "Vouchers",
     nicknameProduct: "CEKAOV",
-    hue: 300,
-    icon: "shield",
     tagline: "MOBA 5v5",
     image: null,
   },

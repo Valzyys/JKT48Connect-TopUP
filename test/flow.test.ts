@@ -406,6 +406,53 @@ describe("catalog outages", () => {
   });
 });
 
+describe("admin pricing", () => {
+  const admin = { authorization: "Bearer test-admin-token-0123456789abcdef" };
+  const ml86 = async () => (await h.request("/api/games/mobile-legends")).body.products.find((p: any) => p.code === "ML86").price;
+
+  it("changes storefront and new-order prices without touching existing orders", async () => {
+    const before = await placeOrder();
+    expect(before.price).toBe(23100);
+    const res = await h.request("/api/admin/pricing", { method: "PUT", headers: admin, body: { markupPercent: 10, markupFlat: 0, roundTo: 1000 } });
+    expect(res.status).toBe(200);
+    expect(await ml86()).toBe(24000); // 21500 * 1.10 = 23650, rounded up to 24000
+    const after = await h.request("/api/orders", { body: { ...orderBody, clientToken: "tok_" + "z".repeat(40) } });
+    expect(after.body.price).toBe(24000);
+    expect((await h.request(`/api/orders/${before.ref}`, { headers: auth })).body.price).toBe(23100);
+  });
+
+  it("applies a per-product override and refuses one below cost", async () => {
+    const low = await h.request("/api/admin/pricing/overrides/ML86", { method: "PUT", headers: admin, body: { sellPrice: 21000 } });
+    expect(low.status).toBe(422);
+    expect(low.body.error.code).toBe("below_cost");
+    const ok = await h.request("/api/admin/pricing/overrides/ML86", { method: "PUT", headers: admin, body: { sellPrice: 22500 } });
+    expect(ok.status).toBe(200);
+    expect(await ml86()).toBe(22500);
+    expect((await placeOrder()).price).toBe(22500);
+    await h.request("/api/admin/pricing/overrides/ML86", { method: "DELETE", headers: admin });
+    expect(await ml86()).toBe(23100);
+  });
+
+  it("ignores an override once the provider cost rises above it", async () => {
+    await h.request("/api/admin/pricing/overrides/ML86", { method: "PUT", headers: admin, body: { sellPrice: 22000 } });
+    await h.db.prepare("UPDATE catalog_products SET harga = 22100 WHERE kode = 'ML86'").run();
+    expect(await ml86()).toBeGreaterThanOrEqual(22100);
+    const catalog = await h.request("/api/admin/catalog", { headers: admin });
+    expect(catalog.body.products.find((p: any) => p.kode === "ML86").priceSource).toBe("override_below_cost");
+  });
+
+  it("validates margin input and keeps an audit trail", async () => {
+    const bad = await h.request("/api/admin/pricing", { method: "PUT", headers: admin, body: { markupPercent: -1, markupFlat: 1.5, roundTo: 7 } });
+    expect(bad.status).toBe(422);
+    expect(Object.keys(bad.body.error.fields).sort()).toEqual(["markupFlat", "markupPercent", "roundTo"]);
+    await h.request("/api/admin/pricing", { method: "PUT", headers: admin, body: { markupPercent: 0.07, markupFlat: 250, roundTo: 50 } });
+    const state = await h.request("/api/admin/pricing", { headers: admin });
+    expect(state.body).toMatchObject({ source: "admin", margin: { markupPercent: 0.07, markupFlat: 250, roundTo: 50 } });
+    expect(state.body.audit[0]).toMatchObject({ action: "margin" });
+    expect((await h.request("/api/admin/pricing", { method: "PUT", body: { markupPercent: 1, markupFlat: 0, roundTo: 1 } })).status).toBe(401);
+  });
+});
+
 describe("admin", () => {
   it("requires the admin token", async () => {
     expect((await h.request("/api/admin/orders")).status).toBe(401);

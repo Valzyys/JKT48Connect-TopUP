@@ -7,7 +7,7 @@ import { addSeconds, iso, parseProviderTimestamp } from "../lib/time";
 import { catalogProduct } from "./catalog";
 import { startFulfillment } from "./fulfillment";
 import { cancelPayment, checkPaymentStatus, createPayment } from "./mypg";
-import { checkInvoiceAmount, sellingPrice } from "./pricing";
+import { checkInvoiceAmount, loadPricing, priceFor } from "./pricing";
 
 /**
  * OrderService: guest orders and the MYPG payment state machine.
@@ -84,6 +84,8 @@ export async function createOrder(ctx: AppContext, input: CreateOrderInput): Pro
     nickname = check?.nickname ?? null;
   }
 
+  // Priced on the server with the current admin rules, then frozen on the order.
+  const { price: sellPrice, source: priceSource } = priceFor(product.kode, product.harga, await loadPricing(ctx.db, ctx.config));
   const nowIso = iso(ctx.now());
   const id = uuid();
   const ref = newOrderRef();
@@ -94,7 +96,7 @@ export async function createOrder(ctx: AppContext, input: CreateOrderInput): Pro
            provider_cost, sell_price, payment_status, fulfillment_status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AWAITING_INVOICE', 'NOT_STARTED', ?, ?)`,
       )
-      .bind(id, ref, accessHash, game.slug, product.kode, product.keterangan, userId, zoneId, dest, nickname, product.harga, sellingPrice(product.harga, ctx.config.pricing), nowIso, nowIso)
+      .bind(id, ref, accessHash, game.slug, product.kode, product.keterangan, userId, zoneId, dest, nickname, product.harga, sellPrice, nowIso, nowIso)
       .run();
   } catch (err) {
     // Lost a race against a concurrent submit with the same token.
@@ -102,7 +104,7 @@ export async function createOrder(ctx: AppContext, input: CreateOrderInput): Pro
     if (raced) return raced;
     throw err;
   }
-  await logEvent(ctx.db, id, "order_created", { product: product.kode, cost: product.harga, price: sellingPrice(product.harga, ctx.config.pricing) }, nowIso);
+  await logEvent(ctx.db, id, "order_created", { product: product.kode, cost: product.harga, price: sellPrice, priceSource }, nowIso);
   return (await getOrderById(ctx.db, id))!;
 }
 

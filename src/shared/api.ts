@@ -11,8 +11,6 @@ export interface GameSummary {
   name: string;
   publisher: string;
   currency: string;
-  hue: number;
-  icon: "sword" | "fire" | "crosshair" | "shield";
   tagline: string;
   image: string | null;
   productCount: number;
@@ -20,6 +18,8 @@ export interface GameSummary {
   recentOrders: number;
   startingPrice: number | null;
   nicknameCheck: boolean;
+  /** Denominations sorted by selling price, unavailable ones included. */
+  products: ProductOffer[];
 }
 
 export interface GamesResponse {

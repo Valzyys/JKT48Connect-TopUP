@@ -5,7 +5,7 @@ import type { Config } from "../env";
 import { ProviderCallError } from "../lib/http";
 import { iso } from "../lib/time";
 import { fetchCatalog } from "./okeconnect";
-import { sellingPrice } from "./pricing";
+import { loadPricing, priceFor, type PricingRules } from "./pricing";
 
 /**
  * Catalog synchronisation and reads. The storefront always serves the latest
@@ -97,14 +97,6 @@ export async function catalogNeedsRefresh(db: D1Database, config: Config, nowMs:
   return okAge > config.catalogTtlSeconds * 1000 && age > 60_000;
 }
 
-export async function gameProducts(db: D1Database, slug: string): Promise<CatalogRow[]> {
-  const { results } = await db
-    .prepare("SELECT * FROM catalog_products WHERE game_slug = ? AND product_type = 'topup' AND present = 1 ORDER BY harga ASC")
-    .bind(slug)
-    .all<CatalogRow>();
-  return results;
-}
-
 export async function catalogProduct(db: D1Database, kode: string): Promise<CatalogRow | null> {
   return db.prepare("SELECT * FROM catalog_products WHERE kode = ?").bind(kode).first<CatalogRow>();
 }
@@ -115,42 +107,42 @@ export async function nicknameProductFor(db: D1Database, game: GameConfig): Prom
   return row && row.is_available === 1 && row.present === 1 && row.product_type === "nickname_check" ? row : null;
 }
 
-export function toOffer(row: CatalogRow, config: Config): ProductOffer | null {
+export function toOffer(row: CatalogRow, rules: PricingRules): ProductOffer | null {
   if (row.harga === null) return null;
-  return { code: row.kode, label: row.keterangan, price: sellingPrice(row.harga, config.pricing), available: row.is_available === 1 };
+  return { code: row.kode, label: row.keterangan, price: priceFor(row.kode, row.harga, rules).price, available: row.is_available === 1 };
 }
 
-export async function gameSummaries(db: D1Database, config: Config): Promise<GameSummary[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT game_slug, COUNT(*) AS n, MIN(harga) AS min_cost FROM catalog_products
-       WHERE product_type = 'topup' AND present = 1 AND is_available = 1 AND game_slug IS NOT NULL GROUP BY game_slug`,
-    )
-    .all<{ game_slug: string; n: number; min_cost: number | null }>();
+/** Every storefront game with its sellable denominations, priced with the current rules. */
+export async function gameSummaries(db: D1Database, config: Config, nowMs: number): Promise<GameSummary[]> {
+  const rules = await loadPricing(db, config);
+  const { results: rows } = await db
+    .prepare("SELECT * FROM catalog_products WHERE product_type = 'topup' AND present = 1 AND game_slug IS NOT NULL ORDER BY harga ASC")
+    .all<CatalogRow>();
   const nick = await db
     .prepare("SELECT kode FROM catalog_products WHERE product_type = 'nickname_check' AND present = 1 AND is_available = 1")
     .all<{ kode: string }>();
   const nickCodes = new Set(nick.results.map((r) => r.kode));
-  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
   const popular = await db
     .prepare("SELECT game_slug, COUNT(*) AS n FROM orders WHERE fulfillment_status = 'SUCCESS' AND created_at > ? GROUP BY game_slug")
-    .bind(since)
+    .bind(new Date(nowMs - 30 * 24 * 3600 * 1000).toISOString())
     .all<{ game_slug: string; n: number }>();
   return GAMES.map((g) => {
-    const stats = results.find((r) => r.game_slug === g.slug);
+    const products = rows.filter((r) => r.game_slug === g.slug).map((r) => toOffer(r, rules)).filter((p): p is ProductOffer => p !== null);
+    // Overrides can reorder prices, so sort by what the guest actually pays.
+    products.sort((a, b) => a.price - b.price);
+    const live = products.filter((p) => p.available);
     return {
       slug: g.slug,
       name: g.name,
       publisher: g.publisher,
       currency: g.currency,
-      hue: g.hue,
-      icon: g.icon,
       tagline: g.tagline,
       image: g.image,
-      productCount: stats?.n ?? 0,
+      productCount: live.length,
       recentOrders: popular.results.find((r) => r.game_slug === g.slug)?.n ?? 0,
-      startingPrice: stats?.min_cost != null ? sellingPrice(stats.min_cost, config.pricing) : null,
+      startingPrice: live[0]?.price ?? null,
       nicknameCheck: g.nicknameProduct !== null && nickCodes.has(g.nicknameProduct),
+      products,
     };
   });
 }

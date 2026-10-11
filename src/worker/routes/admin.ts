@@ -6,7 +6,7 @@ import { iso } from "../lib/time";
 import { syncCatalog } from "../services/catalog";
 import { checkFulfillment, retryFailedFulfillment, startFulfillment } from "../services/fulfillment";
 import { checkPayment } from "../services/orders";
-import { sellingPrice } from "../services/pricing";
+import { loadMargin, loadPricing, priceFor, ROUND_TO_OPTIONS, sellingPrice, validateMargin } from "../services/pricing";
 import { customerStatus } from "../services/state";
 
 type Vars = { Variables: { ctx: AppContext } };
@@ -129,10 +129,87 @@ export const adminRoutes = new Hono<Vars>()
 
   .get("/catalog", async (c) => {
     const ctx = c.get("ctx");
+    const rules = await loadPricing(ctx.db, ctx.config);
     const { results } = await ctx.db.prepare("SELECT * FROM catalog_products ORDER BY product_type, game_slug, harga").all<CatalogRow>();
     const syncs = await ctx.db.prepare("SELECT * FROM catalog_syncs ORDER BY id DESC LIMIT 10").all();
     return c.json({
-      products: results.map((r) => ({ ...r, sellPrice: r.harga !== null && r.product_type === "topup" ? sellingPrice(r.harga, ctx.config.pricing) : null })),
+      products: results.map((r) => {
+        const priced = r.harga !== null && r.product_type === "topup" ? priceFor(r.kode, r.harga, rules) : null;
+        return {
+          ...r,
+          sellPrice: priced?.price ?? null,
+          priceSource: priced?.source ?? null,
+          marginPrice: r.harga !== null && r.product_type === "topup" ? sellingPrice(r.harga, rules) : null,
+          override: rules.overrides.get(r.kode) ?? null,
+        };
+      }),
       syncs: syncs.results,
     });
+  })
+
+  .get("/pricing", async (c) => {
+    const ctx = c.get("ctx");
+    const current = await loadMargin(ctx.db, ctx.config);
+    const audit = await ctx.db.prepare("SELECT action, detail, created_at FROM pricing_audit ORDER BY id DESC LIMIT 20").all<{ action: string; detail: string; created_at: string }>();
+    return c.json({
+      ...current,
+      defaults: ctx.config.pricing,
+      roundToOptions: ROUND_TO_OPTIONS,
+      audit: audit.results.map((a) => ({ ...a, detail: JSON.parse(a.detail) as unknown })),
+    });
+  })
+
+  .put("/pricing", async (c) => {
+    const ctx = c.get("ctx");
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const { margin, errors } = validateMargin(body);
+    if (!margin) throw new AppError(422, "invalid_margin", "Periksa isian margin.", errors);
+    const at = iso(ctx.now());
+    const before = (await loadMargin(ctx.db, ctx.config)).margin;
+    await ctx.db.batch([
+      ctx.db
+        .prepare("INSERT INTO settings (key, value, updated_at) VALUES ('pricing', ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+        .bind(JSON.stringify(margin), at),
+      ctx.db.prepare("INSERT INTO pricing_audit (action, detail, created_at) VALUES ('margin', ?, ?)").bind(JSON.stringify({ before, after: margin }), at),
+    ]);
+    return c.json({ margin, source: "admin", updatedAt: at });
+  })
+
+  .put("/pricing/overrides/:kode", async (c) => {
+    const ctx = c.get("ctx");
+    const kode = c.req.param("kode");
+    const body = (await c.req.json().catch(() => ({}))) as { sellPrice?: unknown };
+    const product = await ctx.db.prepare("SELECT * FROM catalog_products WHERE kode = ?").bind(kode).first<CatalogRow>();
+    if (!product || product.product_type !== "topup" || product.harga === null) throw new AppError(404, "product_not_found", "Produk top-up tidak ditemukan.");
+    const price = Number(body.sellPrice);
+    if (!Number.isInteger(price) || price <= 0 || price > 100_000_000) {
+      throw new AppError(422, "invalid_price", "Harga harus bilangan bulat rupiah.", { sellPrice: "Isi harga dalam rupiah, tanpa titik." });
+    }
+    if (price < product.harga) {
+      throw new AppError(422, "below_cost", "Harga di bawah modal.", { sellPrice: `Minimal ${product.harga} (modal saat ini).` });
+    }
+    const at = iso(ctx.now());
+    const prev = await ctx.db.prepare("SELECT sell_price FROM price_overrides WHERE kode = ?").bind(kode).first<{ sell_price: number }>();
+    await ctx.db.batch([
+      ctx.db
+        .prepare("INSERT INTO price_overrides (kode, sell_price, updated_at) VALUES (?, ?, ?) ON CONFLICT (kode) DO UPDATE SET sell_price = excluded.sell_price, updated_at = excluded.updated_at")
+        .bind(kode, price, at),
+      ctx.db
+        .prepare("INSERT INTO pricing_audit (action, detail, created_at) VALUES ('override_set', ?, ?)")
+        .bind(JSON.stringify({ kode, before: prev?.sell_price ?? null, after: price, cost: product.harga }), at),
+    ]);
+    return c.json({ kode, sellPrice: price });
+  })
+
+  .delete("/pricing/overrides/:kode", async (c) => {
+    const ctx = c.get("ctx");
+    const kode = c.req.param("kode");
+    const prev = await ctx.db.prepare("SELECT sell_price FROM price_overrides WHERE kode = ?").bind(kode).first<{ sell_price: number }>();
+    if (!prev) return c.json({ kode, removed: false });
+    const at = iso(ctx.now());
+    await ctx.db.batch([
+      ctx.db.prepare("DELETE FROM price_overrides WHERE kode = ?").bind(kode),
+      ctx.db.prepare("INSERT INTO pricing_audit (action, detail, created_at) VALUES ('override_removed', ?, ?)").bind(JSON.stringify({ kode, before: prev.sell_price }), at),
+    ]);
+    return c.json({ kode, removed: true });
   });
