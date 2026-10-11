@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { gsap, useGSAP } from "../lib/motion";
 
+const SPARKS = 22;
+
 /**
  * One-off confirmation moment, played when the order page sees the payment
  * become verified or the top-up complete. It is rare by nature (once per
@@ -28,15 +30,16 @@ export function Celebration({ kind, onDone }: { kind: "paid" | "success"; onDone
               .to("[data-pulse]", { opacity: 0, duration: 0.6 }, 0.9)
               .fromTo(
                 "[data-spark]",
-                { x: 0, y: 0, scale: 1, opacity: 1 },
+                { x: 0, y: 0, scale: 1.6, opacity: 1, rotate: 0 },
                 {
-                  x: (i: number) => Math.cos((i / 16) * Math.PI * 2) * gsap.utils.random(90, 150),
-                  y: (i: number) => Math.sin((i / 16) * Math.PI * 2) * gsap.utils.random(90, 150),
-                  scale: 0,
+                  x: (i: number) => Math.cos((i / SPARKS) * Math.PI * 2) * gsap.utils.random(110, 190),
+                  y: (i: number) => Math.sin((i / SPARKS) * Math.PI * 2) * gsap.utils.random(110, 190),
+                  rotate: () => gsap.utils.random(-180, 180),
+                  scale: 0.3,
                   opacity: 0,
-                  duration: 0.95,
-                  ease: "expo.out",
-                  stagger: 0.008,
+                  duration: 1.3,
+                  ease: "power3.out",
+                  stagger: 0.006,
                 },
                 0.32,
               )
@@ -57,13 +60,19 @@ export function Celebration({ kind, onDone }: { kind: "paid" | "success"; onDone
       <div className="grid justify-items-center px-6 text-center">
         <div className="relative grid size-28 place-items-center">
           <span data-pulse aria-hidden className="absolute inset-0 rounded-full bg-success/25" />
-          {Array.from({ length: 16 }, (_, i) => (
+          {Array.from({ length: SPARKS }, (_, i) => (
             <span
               key={i}
               data-spark
               aria-hidden
-              className="absolute left-1/2 top-1/2 -ml-1 -mt-1 size-2 rounded-full"
-              style={{ background: sparkColors[i % sparkColors.length], borderRadius: i % 3 === 0 ? "2px" : "999px" }}
+              className="absolute left-1/2 top-1/2"
+              style={{
+                width: i % 4 === 0 ? 14 : 9,
+                height: i % 4 === 0 ? 5 : 9,
+                margin: i % 4 === 0 ? "-2.5px 0 0 -7px" : "-4.5px 0 0 -4.5px",
+                background: sparkColors[i % sparkColors.length],
+                borderRadius: i % 4 === 0 ? "2px" : "999px",
+              }}
             />
           ))}
           <span data-ring className="relative grid size-24 place-items-center rounded-full bg-success text-[oklch(0.99_0_0)] shadow-[0_12px_32px_-10px_var(--success)]">
