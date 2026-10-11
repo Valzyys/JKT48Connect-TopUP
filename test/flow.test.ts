@@ -374,6 +374,26 @@ describe("nickname check", () => {
   });
 });
 
+describe("storefront activity", () => {
+  it("lists completed top-ups without account identifiers and ranks games by them", async () => {
+    const order = await placeOrder();
+    fake.state.paymentStatus = "PAID";
+    await h.request(`/api/orders/${order.ref}`, { headers: auth });
+    await h.settle();
+    const activity = await h.request("/api/activity");
+    expect(activity.body.items).toHaveLength(1);
+    expect(activity.body.items[0]).toMatchObject({ game: "Mobile Legends", gameSlug: "mobile-legends", product: "Mobile Legends 86 Diamonds" });
+    expect(JSON.stringify(activity.body)).not.toMatch(/12345678|1234567|JC-|OC-/);
+    const games = await h.request("/api/games");
+    expect(games.body.games.find((g: any) => g.slug === "mobile-legends").recentOrders).toBe(1);
+  });
+
+  it("does not list unfinished orders", async () => {
+    await placeOrder();
+    expect((await h.request("/api/activity")).body.items).toEqual([]);
+  });
+});
+
 describe("catalog outages", () => {
   it("keeps serving the last successful catalog and marks it stale", async () => {
     vi.restoreAllMocks();

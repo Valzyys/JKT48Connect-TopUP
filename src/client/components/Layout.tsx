@@ -1,4 +1,4 @@
-import { Moon, Sun } from "@phosphor-icons/react";
+import { Moon, QrCode, Sun } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { useTheme } from "../lib/theme";
@@ -48,12 +48,28 @@ export function Layout({ children }: { children: ReactNode }) {
       <main id="main" className="flex-1">
         {children}
       </main>
-      <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-ink-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>JKT48Connect TopUp. Pembayaran QRIS, tanpa daftar akun.</p>
-          <Link to="/cek" className="text-ink-2 underline-offset-4 hover:text-ink hover:underline">
-            Cek status pesanan
-          </Link>
+      <footer className="mt-8 border-t border-line bg-surface">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))]">
+          <div>
+            <Logo />
+            <p className="mt-3 max-w-[38ch] text-sm leading-relaxed text-ink-2">Top-up game dengan pembayaran QRIS. Tanpa daftar akun, status pesanan bisa dicek kapan saja.</p>
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-2">
+              <QrCode size={16} weight="duotone" className="text-accent" aria-hidden />
+              Pembayaran QRIS
+            </p>
+          </div>
+          <nav aria-label="Belanja" className="grid content-start gap-2 text-sm">
+            <p className="font-semibold text-ink">Belanja</p>
+            <Link to="/" className="text-ink-2 hover:text-ink">Semua game</Link>
+            <Link to="/cek" className="text-ink-2 hover:text-ink">Cek pesanan</Link>
+          </nav>
+          <div className="grid content-start gap-2 text-sm">
+            <p className="font-semibold text-ink">Bantuan</p>
+            <p className="text-ink-2">Simpan nomor pesanan untuk setiap transaksi. Nomor itu dipakai untuk penelusuran bila ada kendala.</p>
+          </div>
+        </div>
+        <div className="border-t border-line">
+          <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-ink-3 sm:px-6">Nama dan merek game adalah milik pemiliknya masing-masing.</p>
         </div>
       </footer>
     </div>

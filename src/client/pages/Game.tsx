@@ -1,9 +1,10 @@
-import { ArrowLeft, CheckCircle, MagnifyingGlass, QrCode, WarningCircle } from "@phosphor-icons/react";
+import { ArrowLeft, Check, CheckCircle, Coins, Diamond, Lightning, MagnifyingGlass, QrCode, ShieldCheck, WarningCircle } from "@phosphor-icons/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import type { GameDetailResponse, NicknameResult } from "../../shared/api";
-import { GameMark } from "../components/GameMark";
+import { PosterArt } from "../components/GamePoster";
+import { EASE, gsap, motionOK, useGSAP } from "../lib/motion";
 import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, shortLabel } from "../lib/format";
@@ -36,6 +37,23 @@ export function Game() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   // One checkout token per exact payload: a retried submit reuses the same order.
   const tokenRef = useRef<{ key: string; token: string } | null>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  // Entrance once the game is loaded: banner title, then the denomination grid.
+  useGSAP(
+    () => {
+      if (!data) return;
+      motionOK(() => {
+        gsap
+          .timeline({ defaults: { ease: EASE } })
+          .from("[data-game-banner]", { y: 20, opacity: 0, duration: 0.7 })
+          .from("[data-banner-title]", { yPercent: 40, opacity: 0, duration: 0.8 }, "-=0.45")
+          .from("[data-banner-meta] > *", { y: 10, opacity: 0, duration: 0.5, stagger: 0.05 }, "-=0.5")
+          .from("[data-denom]", { y: 16, opacity: 0, duration: 0.5, stagger: 0.03 }, "-=0.3");
+      });
+    },
+    { scope: pageRef, dependencies: [data?.game.slug] },
+  );
 
   const userFieldId = useFieldId("user");
   const zoneFieldId = useFieldId("zone");
@@ -134,22 +152,36 @@ export function Game() {
   if (!data || !game) return <GameSkeleton />;
 
   const userError = touched ? errors.userId : undefined;
+  const CurrencyIcon = /diamond/i.test(game.currency) ? Diamond : Coins;
   const zoneError = touched ? errors.zoneId : undefined;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-6 lg:pb-16">
-      <Link to="/" className="press inline-flex items-center gap-1.5 rounded-button py-2 text-sm text-ink-2 hover:text-ink">
-        <ArrowLeft size={16} aria-hidden />
-        Semua game
-      </Link>
-
-      <div className="mt-3 flex items-center gap-4">
-        <GameMark name={game.name} hue={game.hue} size="lg" />
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{game.name}</h1>
-          <p className="text-sm text-ink-3">{game.publisher}</p>
+    <div ref={pageRef} className="mx-auto max-w-6xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:pb-16">
+      <section data-game-banner className="relative isolate overflow-hidden rounded-[28px] text-white">
+        <PosterArt game={game} wordmark={false} />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[oklch(0.14_0.03_275/0.85)] via-[oklch(0.14_0.03_275/0.45)] to-transparent" />
+        <div className="relative px-5 pb-6 pt-4 sm:px-8 sm:pb-9 sm:pt-6">
+          <Link to="/" className="press inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-sm text-white/90 backdrop-blur-md hover:bg-white/20">
+            <ArrowLeft size={16} aria-hidden />
+            Semua game
+          </Link>
+          <h1 data-banner-title className="display mt-10 text-[clamp(2.8rem,9vw,5.5rem)] sm:mt-14">{game.name}</h1>
+          <div data-banner-meta className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">{game.publisher}</span>
+            <span className="rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">{game.tagline}</span>
+            {game.nicknameCheck ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">
+                <ShieldCheck size={15} weight="fill" aria-hidden />
+                Cek nama akun
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">
+              <Lightning size={15} weight="fill" aria-hidden />
+              Proses otomatis
+            </span>
+          </div>
         </div>
-      </div>
+      </section>
 
       {data.catalog.stale && data.catalog.available ? (
         <div className="mt-6">
@@ -237,16 +269,30 @@ export function Game() {
                       role="radio"
                       aria-checked={active}
                       disabled={!p.available}
+                      data-denom
                       onClick={() => {
                         setSelected(p.code);
                         setSubmitError(null);
                       }}
-                      className={`press grid min-h-[4.5rem] content-between gap-1 rounded-button border px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`press relative grid min-h-[5.5rem] content-between gap-2 overflow-hidden rounded-2xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:p-3.5 ${
                         active ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line bg-surface hover:border-line-strong hover:bg-surface-2"
                       }`}
                     >
-                      <span className="text-sm font-medium leading-snug text-ink">{shortLabel(p.label, game.name)}</span>
-                      <span className="font-mono text-sm tabular text-ink-2">{p.available ? idr(p.price) : "Habis"}</span>
+                      <span className="flex items-start justify-between gap-2">
+                        <span className={`grid size-8 shrink-0 place-items-center rounded-xl ${active ? "bg-accent text-accent-ink" : "bg-surface-2 text-accent"}`}>
+                          <CurrencyIcon size={18} weight="fill" aria-hidden />
+                        </span>
+                        <span
+                          className={`grid size-5 place-items-center rounded-full border transition-colors duration-150 ${active ? "border-accent bg-accent text-accent-ink" : "border-line-strong"}`}
+                          aria-hidden
+                        >
+                          {active ? <Check size={12} weight="bold" /> : null}
+                        </span>
+                      </span>
+                      <span className="grid gap-0.5">
+                        <span className="text-sm font-semibold leading-snug text-ink">{shortLabel(p.label, game.name)}</span>
+                        <span className={`font-mono text-sm tabular ${active ? "text-accent" : "text-ink-2"}`}>{p.available ? idr(p.price) : "Habis"}</span>
+                      </span>
                     </button>
                   );
                 })}

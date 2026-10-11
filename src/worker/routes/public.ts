@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { GameDetailResponse, GamesResponse, OrderView } from "../../shared/api";
+import type { ActivityResponse, GameDetailResponse, GamesResponse, OrderView } from "../../shared/api";
 import { buildDest, findGame } from "../../shared/games";
 import { AppError, type AppContext } from "../context";
 import { getFulfillment, getOrderById, getOrderByRef, getPayment, rateLimit } from "../db";
@@ -49,6 +49,22 @@ export const publicRoutes = new Hono<Vars>()
       catalog: await catalogMeta(ctx.db, ctx.config, ctx.now()),
       game: { ...summary, userId: game.userId, zone: game.zone },
       products,
+    };
+    c.header("Cache-Control", "public, max-age=30");
+    return c.json(res);
+  })
+
+  // Social proof from real data only: completed top-ups, with no account identifiers.
+  .get("/activity", async (c) => {
+    const ctx = c.get("ctx");
+    const { results } = await ctx.db
+      .prepare(
+        `SELECT o.game_slug, o.product_label, f.completed_at FROM fulfillments f JOIN orders o ON o.id = f.order_id
+         WHERE f.status = 'SUCCESS' AND f.completed_at IS NOT NULL ORDER BY f.completed_at DESC LIMIT 12`,
+      )
+      .all<{ game_slug: string; product_label: string; completed_at: string }>();
+    const res: ActivityResponse = {
+      items: results.map((r) => ({ game: findGame(r.game_slug)?.name ?? r.game_slug, gameSlug: r.game_slug, product: r.product_label, completedAt: r.completed_at })),
     };
     c.header("Cache-Control", "public, max-age=30");
     return c.json(res);

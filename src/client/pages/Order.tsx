@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { toast } from "sonner";
 import type { CustomerStatus, OrderView } from "../../shared/api";
+import { findGame } from "../../shared/games";
+import { Celebration } from "../components/Celebration";
+import { PosterArt } from "../components/GamePoster";
 import { Button, Notice, Skeleton } from "../components/ui";
+import { EASE, gsap, motionOK, useGSAP } from "../lib/motion";
 import { api, ApiRequestError } from "../lib/api";
 import { countdown, idr, wibDateTime, wibTime } from "../lib/format";
 import { readKeyFromHash, saveOrder, tokenFor } from "../lib/storage";
@@ -64,6 +68,40 @@ export function Order() {
   const [busy, setBusy] = useState<"cancel" | "retry" | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const startedAt = useRef(Date.now());
+  const ticketRef = useRef<HTMLElement>(null);
+  const prevStatus = useRef<CustomerStatus | null>(null);
+  const [celebrate, setCelebrate] = useState<"paid" | "success" | null>(null);
+
+  // Play the confirmation moment only for transitions seen live on this page.
+  useEffect(() => {
+    if (!order) return;
+    const prev = prevStatus.current;
+    prevStatus.current = order.status;
+    if (!prev || prev === order.status) return;
+    if (order.status === "SUCCESS") setCelebrate("success");
+    else if ((prev === "WAITING_PAYMENT" || prev === "CANCELLING") && ["PAID", "PROCESSING", "VERIFYING"].includes(order.status)) setCelebrate("paid");
+  }, [order?.status]);
+
+  // Ticket entrance on first load, and the SN reveal whenever it appears.
+  const loaded = order !== null;
+  useGSAP(
+    () => {
+      if (!loaded) return;
+      motionOK(() => {
+        gsap.from("[data-ticket-part]", { y: 18, opacity: 0, duration: 0.7, ease: EASE, stagger: 0.07 });
+      });
+    },
+    { scope: ticketRef, dependencies: [loaded] },
+  );
+  useGSAP(
+    () => {
+      if (order?.status !== "SUCCESS") return;
+      motionOK(() => {
+        gsap.from("[data-sn] > *", { y: 12, opacity: 0, duration: 0.6, ease: EASE, stagger: 0.08, delay: celebrate ? 2.3 : 0.3 });
+      });
+    },
+    { scope: ticketRef, dependencies: [order?.status] },
+  );
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -163,13 +201,27 @@ export function Order() {
   }
 
   const { cls, Icon } = tone(order.status);
+  const gameConfig = findGame(order.game.slug);
   const stage = stageOf(order.status);
   const pay = order.payment;
 
   return (
     <Shell>
-      <article className="rise overflow-hidden rounded-ticket border border-line bg-surface shadow-raised">
-        <header className="p-5 sm:p-6">
+      <article ref={ticketRef} className="relative overflow-hidden rounded-ticket border border-line bg-surface shadow-raised">
+        {celebrate ? <Celebration kind={celebrate} onDone={() => setCelebrate(null)} /> : null}
+        {gameConfig ? (
+          <div data-ticket-part className="relative h-24 overflow-hidden text-white sm:h-28">
+            <PosterArt game={gameConfig} wordmark={false} />
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[oklch(0.14_0.03_275/0.8)] to-transparent" />
+            <div className="relative flex h-full items-end justify-between gap-3 px-5 pb-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="display truncate text-3xl sm:text-4xl">{order.game.name}</p>
+                <p className="truncate text-sm text-white/80">{order.product.label}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <header data-ticket-part className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm text-ink-3">Nomor pesanan</p>
@@ -191,7 +243,7 @@ export function Order() {
         ) : null}
 
         {order.status === "SUCCESS" && order.fulfillment ? (
-          <section className="perforation px-5 py-5 sm:px-6" aria-label="Bukti top-up">
+          <section data-sn className="perforation bg-success-soft/40 px-5 py-5 sm:px-6" aria-label="Bukti top-up">
             <p className="text-sm text-ink-3">Nomor seri (SN)</p>
             {order.fulfillment.sn ? <CopyText value={order.fulfillment.sn} className="mt-1 text-base" label="SN disalin" /> : <p className="mt-1 text-ink-2">Tidak dikirim penyedia.</p>}
             {order.fulfillment.completedAt ? <p className="mt-2 text-sm text-ink-3">Selesai {wibDateTime(order.fulfillment.completedAt)}</p> : null}
@@ -289,15 +341,31 @@ function Row({ k, v, mono, strong }: { k: string; v: string; mono?: boolean; str
 }
 
 function Progress({ index, failed }: { index: number; failed: boolean }) {
+  const root = useRef<HTMLOListElement>(null);
+  // Bars fill one after another up to the current stage; replays forward on each change.
+  useGSAP(
+    () => {
+      const fills = gsap.utils.toArray<HTMLElement>("[data-fill]");
+      const targets = fills.map((_, i) => (i < index ? 1 : i === index && index < 3 ? 0.45 : 0));
+      const mm = gsap.matchMedia();
+      mm.add({ motion: "(prefers-reduced-motion: no-preference)", reduce: "(prefers-reduced-motion: reduce)" }, (ctx) => {
+        const motion = (ctx.conditions as { motion: boolean }).motion;
+        fills.forEach((el, i) => gsap.to(el, { scaleX: targets[i], duration: motion ? 0.8 : 0, ease: "power2.inOut", delay: motion ? i * 0.15 : 0 }));
+      });
+    },
+    { scope: root, dependencies: [index] },
+  );
   return (
-    <ol className="mt-5 grid grid-cols-3 gap-2" aria-label="Tahap pesanan">
+    <ol ref={root} className="mt-5 grid grid-cols-3 gap-2" aria-label="Tahap pesanan">
       {STAGES.map((label, i) => {
         const done = i < index;
         const current = i === index && index < 3;
-        const bar = done ? "bg-accent" : current && failed ? "bg-danger" : current ? "bg-accent/40" : "bg-surface-3";
         return (
           <li key={label} className="grid gap-1.5" aria-current={current ? "step" : undefined}>
-            <span className={`h-1.5 rounded-full transition-colors duration-300 ${bar}`} />
+            <span className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+              {/* Inline transform, not a Tailwind scale utility: GSAP owns this element's transform. */}
+              <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full rounded-full ${current && failed ? "bg-danger" : "bg-accent"}`} />
+            </span>
             <span className={`text-xs ${done || current ? "text-ink" : "text-ink-3"}`}>
               {label}
               <span className="sr-only">{done ? ", selesai" : current ? (failed ? ", terhenti" : ", berlangsung") : ""}</span>

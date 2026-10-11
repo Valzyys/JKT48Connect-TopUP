@@ -76,6 +76,13 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 - **Provider balance** (`Sisa Saldo`) is redacted before anything is stored and is never returned to guests.
 - **Catalog outages** keep the last successful sync and mark it stale. Products missing from a newer sync become unavailable.
 
+## Storefront design
+
+- The red hero, poster grid, and condensed Archivo display type are the brand surface. UI text stays in Geist.
+- Motion uses GSAP (`src/client/lib/motion.ts`): the hero entrance, poster and section reveals on scroll, the order progress bars, and a one-off confirmation when a payment is verified or a top-up completes (`components/Celebration.tsx`). Every animation is skipped under `prefers-reduced-motion`.
+- The "Live" strip and the "Paling laris" ranking use real data from `GET /api/activity` (completed top-ups, no account identifiers) and order counts. With fewer than three completed orders, the strip lists what is on sale instead.
+- **Game artwork:** no licensed key art ships with the repo. Put official images in `public/games/` and set `image` in `src/shared/games.ts` (e.g. `"/games/mobile-legends.webp"`, 3:4). Until then, posters are generated from each game's hue and genre glyph.
+
 ## Admin
 
 `/admin` (token from `ADMIN_TOKEN`) lists orders needing attention, shows redacted provider history, re-runs reconciliation, records manual resolutions, and can start a new top-up attempt after a definitive failure. That last action asks the operator to type `RETRY`, because a resubmission can be charged twice.

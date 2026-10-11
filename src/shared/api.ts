@@ -12,7 +12,12 @@ export interface GameSummary {
   publisher: string;
   currency: string;
   hue: number;
+  icon: "sword" | "fire" | "crosshair" | "shield";
+  tagline: string;
+  image: string | null;
   productCount: number;
+  /** Completed top-ups in the last 30 days, used to rank "Paling laris". */
+  recentOrders: number;
   startingPrice: number | null;
   nicknameCheck: boolean;
 }
@@ -20,6 +25,18 @@ export interface GameSummary {
 export interface GamesResponse {
   catalog: CatalogMeta;
   games: GameSummary[];
+}
+
+/** Recently completed top-ups, without any account identifiers. */
+export interface ActivityItem {
+  game: string;
+  gameSlug: string;
+  product: string;
+  completedAt: string;
+}
+
+export interface ActivityResponse {
+  items: ActivityItem[];
 }
 
 export interface ProductOffer {

@@ -131,6 +131,11 @@ export async function gameSummaries(db: D1Database, config: Config): Promise<Gam
     .prepare("SELECT kode FROM catalog_products WHERE product_type = 'nickname_check' AND present = 1 AND is_available = 1")
     .all<{ kode: string }>();
   const nickCodes = new Set(nick.results.map((r) => r.kode));
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const popular = await db
+    .prepare("SELECT game_slug, COUNT(*) AS n FROM orders WHERE fulfillment_status = 'SUCCESS' AND created_at > ? GROUP BY game_slug")
+    .bind(since)
+    .all<{ game_slug: string; n: number }>();
   return GAMES.map((g) => {
     const stats = results.find((r) => r.game_slug === g.slug);
     return {
@@ -139,7 +144,11 @@ export async function gameSummaries(db: D1Database, config: Config): Promise<Gam
       publisher: g.publisher,
       currency: g.currency,
       hue: g.hue,
+      icon: g.icon,
+      tagline: g.tagline,
+      image: g.image,
       productCount: stats?.n ?? 0,
+      recentOrders: popular.results.find((r) => r.game_slug === g.slug)?.n ?? 0,
       startingPrice: stats?.min_cost != null ? sellingPrice(stats.min_cost, config.pricing) : null,
       nicknameCheck: g.nicknameProduct !== null && nickCodes.has(g.nicknameProduct),
     };

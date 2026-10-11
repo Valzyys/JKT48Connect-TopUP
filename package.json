@@ -15,9 +15,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@gsap/react": "^2.1.2",
     "@phosphor-icons/react": "^2.1.10",
+    "gsap": "^3.15.0",
     "hono": "^4.13.13",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
