@@ -37,6 +37,40 @@ describe("OkeConnect catalog", () => {
     expect(classifyProduct({ kode: "PUBG60", keterangan: "PUBG 60 UC", produk: "TPG PUBG Mobile" }).product_type).toBe("other");
   });
 
+  it("maps the live catalog's produk names to games and leaves vouchers and services unsold", () => {
+    const cases: [string, string, string | null][] = [
+      ["DML86", "TPG Diamond Mobile Legends", "mobile-legends"],
+      ["FF100", "TPG Diamond Free Fire", "free-fire"],
+      ["FFM1", "TPG Free Fire Membership", "free-fire"],
+      ["PUBG250", "TPG Game Mobile PUBG", "pubg-mobile"],
+      ["GPUBGM60", "TPG Game Mobile PUBG Global", "pubg-mobile-global"],
+      ["MCG5", "TPG Magic Chess Go Go", "magic-chess-go-go"],
+      ["HOK80", "TPG Honor of Kings", "honor-of-kings"],
+      ["CODM26", "TPG Call Of Duty", "call-of-duty-mobile"],
+      ["GGDF60", "TPG Delta Force", "delta-force"],
+      ["AB6BB", "TPG Arena Breakout", "arena-breakout"],
+      ["BSAF1", "TPG Blood Strike", "blood-strike"],
+      ["AOV40", "TPG Arena of Valor", "arena-of-valor"],
+      ["INLP11", "TPG Lokapala", "lokapala"],
+      ["SPEED10", "TPG Diamond Speed Drifter", "speed-drifter"],
+      ["INWW6", "TPG Werewolf", "werewolf"],
+      ["PB10", "TPG Point Blank Zepetto", "point-blank"],
+      ["ZPAF14", "TPG Zepeto", "zepeto"],
+      // Voucher codes, other services and games with an undocumented destination stay unsold.
+      ["PUBGV660", "TPG Game Vcr PUBG", null],
+      ["VPB10", "TPG Game Vcr Point Blank", null],
+      ["VGPI10", "TPG Google Play ID", null],
+      ["LIFEAF65", "TPG Life After Credit", null],
+      ["NSAF2", "TPG PUBG New State", null],
+      ["DOKU10", "Top Up Saldo Doku", null],
+    ];
+    for (const [kode, produk, slug] of cases) {
+      const c = classifyProduct({ kode, keterangan: kode, produk });
+      expect([kode, c.game_slug]).toEqual([kode, slug]);
+      expect(c.product_type).toBe(slug ? "topup" : "other");
+    }
+  });
+
   it("handles availability and invalid records conservatively", () => {
     const result = parseCatalog(
       JSON.stringify([

@@ -43,6 +43,19 @@ Non-secret settings live in `wrangler.jsonc` under `vars`:
 
 ## Purchase flow
 
+### Games
+
+These 16 games are sold, mapped from the live catalog's `produk` names in `src/shared/games.ts`: Mobile Legends, Free Fire (diamonds and memberships), PUBG Mobile, PUBG Mobile Global, Magic Chess: Go Go, Honor of Kings, Call of Duty Mobile, Delta Force, Arena Breakout, Blood Strike, Arena of Valor, Lokapala, Speed Drifter, Werewolf, Point Blank (Zepetto) and ZEPETO.
+
+Some catalog products are kept for admins but never sold:
+- voucher codes (Google Play, Steam, Unipin, Razer Gold, Garena Shell, Gemscool, Roblox, PUBG and Point Blank vouchers);
+- e-wallet and driver balances;
+- streaming;
+- LifeAfter, which needs a server name, and whose catalog group also holds a PLN token item;
+- PUBG New State.
+
+They stay unsold because the H2H destination format for them is not documented. The ID formats per game come from each game's in-app profile. Confirm them with one small test purchase per game before promoting it.
+
 1. Storefront reads games and denominations from the last successful catalog sync (`GET /api/games`, `/api/games/:slug`). Nickname-check products such as `CEKML` are utilities, never denominations.
 2. Optional nickname check (`POST /api/nickname-check`) calls H2H `/trx` with the game's `CEK*` code. Results are cached for 30 minutes and rate limited, because each check has a provider cost. Offered only when the code is active in the catalog.
 3. `POST /api/orders` validates the account, prices the product on the server, creates the order, and requests one QRIS invoice. The browser sends a random checkout token: its hash is both the idempotency key and the order's access key, so retries and refreshes never create a second order or invoice.

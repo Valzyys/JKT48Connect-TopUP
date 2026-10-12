@@ -1,4 +1,5 @@
-import { Moon, Receipt, Sun, Lightning } from "@phosphor-icons/react";
+import { ArrowRight, Lightning, Moon, QrCode, Receipt, ShieldCheck, Sun } from "@phosphor-icons/react";
+import { GAMES } from "../../shared/games";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { type ReactNode, useRef } from "react";
 import { Link, useLocation } from "react-router";
@@ -114,12 +115,94 @@ export function Layout({ children }: { children: ReactNode }) {
       <main id="main" className="flex-1">
         {children}
       </main>
-      <footer className="mt-16">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-8 text-xs text-ink-3">
-          <p>JKT48Connect TopUp. Nama dan logo game adalah milik pemiliknya masing-masing.</p>
-          <p>Pembayaran QRIS · Proses otomatis</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
+  );
+}
+
+const WALLETS = ["QRIS", "GoPay", "OVO", "DANA", "ShopeePay", "LinkAja", "m-banking"];
+
+function Footer() {
+  return (
+    <footer className="mt-20 px-3 pb-3 max-lg:pb-28">
+      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-6 py-10 text-[var(--game-ink)] sm:px-10">
+        <span aria-hidden className="pointer-events-none absolute -bottom-10 -right-4 select-none text-[11rem] font-extrabold leading-none tracking-[-0.06em] opacity-[0.08] sm:text-[16rem]">
+          JKT48
+        </span>
+        <div className="relative flex flex-wrap items-end justify-between gap-6">
+          <div className="max-w-md">
+            <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">Top up sekarang, item masuk otomatis.</p>
+            <p className="mt-2 text-sm opacity-85">Tanpa daftar akun. Bayar QRIS dari aplikasi apa pun, pantau statusnya dari link pesanan.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/" className="press inline-flex h-12 items-center gap-2 rounded-full bg-[var(--game-ink)] px-6 font-bold text-[var(--game)] shadow-[0_10px_24px_-10px_rgb(0_0_0/0.5)]">
+              <Lightning size={18} weight="fill" aria-hidden />
+              Mulai top-up
+            </Link>
+            <Link to="/cek" className="press inline-flex h-12 items-center gap-2 rounded-full border border-[color-mix(in_oklab,var(--game-ink)_35%,transparent)] px-6 font-bold">
+              Cek pesanan
+              <ArrowRight size={16} weight="bold" aria-hidden />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto mt-3 grid max-w-6xl gap-8 rounded-[36px] bg-surface px-6 py-10 shadow-raised ring-1 ring-line sm:px-10 md:grid-cols-[1.3fr_1fr_0.8fr_1.1fr]">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-10 place-items-center rounded-full bg-[linear-gradient(140deg,var(--game),var(--game-deep))] font-extrabold text-[var(--game-ink)]">J</span>
+            <span className="text-[15px] font-extrabold tracking-tight">JKT48Connect TopUp</span>
+          </div>
+          <p className="mt-3 max-w-xs text-sm leading-relaxed text-ink-2">Top up game langsung ke ID akunmu. Harga mengikuti katalog penyedia dan tampil lengkap sebelum bayar.</p>
+          <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-ink-3">
+            <ShieldCheck size={16} weight="fill" className="text-[var(--game)]" aria-hidden />
+            Pembayaran diverifikasi otomatis sebelum top-up dikirim.
+          </p>
+        </div>
+        <nav aria-label="Game">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-ink-3">Game</h2>
+          <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:grid-cols-1">
+            {GAMES.slice(0, 8).map((g) => (
+              <li key={g.slug}>
+                <Link to={`/game/${g.slug}`} className="text-ink-2 hover:text-ink">
+                  {g.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <nav aria-label="Bantuan">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-ink-3">Bantuan</h2>
+          <ul className="mt-3 grid gap-2 text-sm">
+            <li>
+              <Link to="/cek" className="text-ink-2 hover:text-ink">
+                Cek pesanan
+              </Link>
+            </li>
+            <li>
+              <Link to="/" className="text-ink-2 hover:text-ink">
+                Semua game
+              </Link>
+            </li>
+          </ul>
+        </nav>
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-ink-3">Bayar dengan</h2>
+          <ul className="mt-3 flex flex-wrap gap-1.5">
+            {WALLETS.map((w) => (
+              <li key={w} className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-bold ${w === "QRIS" ? "bg-[var(--game)] text-[var(--game-ink)]" : "bg-surface-2 text-ink-2"}`}>
+                {w === "QRIS" ? <QrCode size={14} weight="bold" aria-hidden /> : null}
+                {w}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-ink-3">Semua aplikasi yang bisa scan QRIS.</p>
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-6 py-5 text-xs text-ink-3 sm:px-10">
+        <p>© {new Date().getFullYear()} JKT48Connect TopUp</p>
+        <p>Nama dan logo game adalah milik pemiliknya masing-masing.</p>
+      </div>
+    </footer>
   );
 }
