@@ -29,9 +29,8 @@ export interface GameConfig {
   nicknameProduct: string | null;
   tagline: string;
   /**
-   * Official key art, e.g. "/games/mobile-legends.webp" placed in /public.
-   * Null until licensed artwork is supplied; the storefront is typographic
-   * and does not need it.
+   * The game's square app icon in /public/games (512px WebP), or null when we
+   * have none yet; the poster then draws itself from the game's colour.
    */
   image: string | null;
 }
@@ -48,7 +47,7 @@ export const GAMES: GameConfig[] = [
     currency: "Diamonds",
     nicknameProduct: "CEKML",
     tagline: "MOBA 5v5",
-    image: null,
+    image: "/games/mobile-legends.webp",
   },
   {
     slug: "free-fire",
@@ -60,7 +59,7 @@ export const GAMES: GameConfig[] = [
     currency: "Diamonds",
     nicknameProduct: "CEKFF",
     tagline: "Battle royale",
-    image: null,
+    image: "/games/free-fire.webp",
   },
   {
     slug: "pubg-mobile",
@@ -72,7 +71,7 @@ export const GAMES: GameConfig[] = [
     currency: "UC",
     nicknameProduct: null,
     tagline: "Battle royale",
-    image: null,
+    image: "/games/pubg-mobile.webp",
   },
   {
     slug: "magic-chess-go-go",
@@ -96,7 +95,7 @@ export const GAMES: GameConfig[] = [
     currency: "Tokens",
     nicknameProduct: null,
     tagline: "MOBA 5v5",
-    image: null,
+    image: "/games/honor-of-kings.webp",
   },
   {
     slug: "call-of-duty-mobile",
@@ -108,7 +107,7 @@ export const GAMES: GameConfig[] = [
     currency: "CP",
     nicknameProduct: "CEKCODM",
     tagline: "FPS",
-    image: null,
+    image: "/games/call-of-duty-mobile.webp",
   },
   {
     slug: "delta-force",
@@ -120,7 +119,7 @@ export const GAMES: GameConfig[] = [
     currency: "Delta Coins",
     nicknameProduct: null,
     tagline: "Tactical shooter",
-    image: null,
+    image: "/games/delta-force.webp",
   },
   {
     slug: "arena-breakout",
@@ -144,7 +143,7 @@ export const GAMES: GameConfig[] = [
     currency: "Gold",
     nicknameProduct: null,
     tagline: "FPS battle royale",
-    image: null,
+    image: "/games/blood-strike.webp",
   },
   {
     slug: "pubg-mobile-global",
@@ -156,7 +155,7 @@ export const GAMES: GameConfig[] = [
     currency: "UC",
     nicknameProduct: null,
     tagline: "Battle royale, server global",
-    image: null,
+    image: "/games/pubg-mobile.webp",
   },
   {
     slug: "arena-of-valor",

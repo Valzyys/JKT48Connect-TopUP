@@ -6,7 +6,12 @@ import { gsap } from 'gsap';
 
 // Local changes: colours blend with GSAP when they change, reduced motion renders
 // one still frame, and a missing WebGL context fails quietly (the parent keeps a
-// CSS gradient underneath).
+// CSS gradient underneath). For speed it renders at half the CSS resolution (the
+// picture is a soft blur, so upscaling is invisible) and animates at 30 fps.
+
+/** Drawing-buffer pixels per CSS pixel. */
+const RENDER_SCALE = 0.5;
+const FRAME_MS = 1000 / 30;
 
 interface GrainientProps {
   timeSpeed?: number;
@@ -189,7 +194,7 @@ const Grainient: React.FC<GrainientProps> = ({
         webgl: 2,
         alpha: true,
         antialias: false,
-        dpr: Math.min(window.devicePixelRatio || 1, 2)
+        dpr: RENDER_SCALE
       });
       if (!(renderer.gl as WebGL2RenderingContext).texStorage2D) return; // WebGL1 only: the shader needs WebGL2
     } catch {
@@ -258,10 +263,13 @@ const Grainient: React.FC<GrainientProps> = ({
     let isPageVisible = !document.hidden;
     const t0 = performance.now();
 
+    let last = 0;
     const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      if (t - last < FRAME_MS) return;
+      last = t;
       (program.uniforms.iTime as { value: number }).value = (t - t0) * 0.001;
       renderer.render({ scene: mesh });
-      raf = requestAnimationFrame(loop);
     };
 
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

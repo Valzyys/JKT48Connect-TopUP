@@ -65,7 +65,7 @@ export function Layout({ children }: { children: ReactNode }) {
           data-bar
           className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-2 rounded-full border border-white/50 bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] pl-2 pr-1.5 shadow-[0_8px_30px_-16px_rgb(0_0_0/0.25)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10"
         >
-          <Link to="/" className="press flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3" aria-label="JKT48Connect TopUp, halaman utama">
+          <Link to="/" className="press flex shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-1 min-[420px]:pr-3" aria-label="JKT48Connect TopUp, halaman utama">
             <span className="grid size-10 place-items-center rounded-full bg-[linear-gradient(140deg,var(--game),var(--game-deep))] text-[15px] font-extrabold text-[var(--game-ink)] shadow-[0_6px_16px_-6px_var(--game)]">
               J
             </span>
@@ -74,7 +74,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="block text-[11px] font-medium text-ink-3">Top up game, bayar QRIS</span>
             </span>
           </Link>
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <nav aria-label="Navigasi utama" className="relative flex items-center rounded-full bg-surface-2/80 p-1">
               <span
                 ref={pill}
@@ -91,11 +91,11 @@ export function Layout({ children }: { children: ReactNode }) {
                     }}
                     to={n.to}
                     aria-current={on ? "page" : undefined}
-                    className={`relative z-10 inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition-colors duration-300 ${
+                    className={`relative z-10 inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-semibold transition-colors duration-300 min-[400px]:px-3.5 min-[400px]:text-sm ${
                       on ? "text-ink" : "text-ink-3 hover:text-ink"
                     }`}
                   >
-                    <n.Icon size={16} weight={on ? "fill" : "bold"} className={`${on ? "text-[var(--game)]" : ""} max-[360px]:hidden`} aria-hidden />
+                    <n.Icon size={16} weight={on ? "fill" : "bold"} className={`${on ? "text-[var(--game)]" : ""} max-[400px]:hidden`} aria-hidden />
                     {n.label}
                   </Link>
                 );
@@ -104,7 +104,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={toggle}
-              className="press grid size-11 place-items-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink"
+              className="press grid size-11 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink"
               aria-label={theme === "dark" ? "Gunakan tema terang" : "Gunakan tema gelap"}
             >
               {theme === "dark" ? <Sun size={19} weight="bold" aria-hidden /> : <Moon size={19} weight="bold" aria-hidden />}

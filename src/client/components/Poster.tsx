@@ -2,7 +2,7 @@ import { useState } from "react";
 import { themeFor } from "../lib/gameTheme";
 
 /**
- * A 3:4 game poster. With `image` set (licensed key art, see games.ts) it shows
+ * A 3:4 game poster. With `image` set (the game's app icon, see games.ts) it shows
  * that picture; otherwise, or if the file fails to load, it draws the game's own
  * poster from its colour, monogram and currency icon. Sizes are in container
  * units, so the same poster works as a thumbnail and as the hero card.
@@ -28,7 +28,16 @@ export function Poster({ slug, name, image, className = "" }: { slug: string; na
           </span>
         </>
       ) : (
-        <img src={image!} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="absolute inset-0 size-full object-cover" />
+        // Square app icon on top, fading into the game's gradient so nothing is cropped.
+        <img
+          src={image!}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(true)}
+          className="absolute inset-x-0 top-0 aspect-square w-full object-cover [mask-image:linear-gradient(to_bottom,#000_62%,transparent_98%)]"
+        />
       )}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/25 to-transparent px-[8%] pb-[8%] pt-[30%] text-white">
         <span className="block font-extrabold uppercase leading-[0.9] tracking-[-0.02em] [text-wrap:balance]" style={{ fontSize: "11.5cqw" }}>
