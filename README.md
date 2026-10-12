@@ -18,7 +18,7 @@ All provider calls are made server-side. Keys and identifiers never reach the br
 
 ```bash
 npm install
-npx wrangler d1 create jkt48connect-topup        # paste the id into wrangler.jsonc
+# D1 database already created; its id is in wrangler.jsonc (database_name jkt48connect-topup)
 npm run db:migrate:remote
 npx wrangler secret put MYPG_API_KEY
 npx wrangler secret put OKECONNECT_CATALOG_ID     # the `id` value of the catalog URL
