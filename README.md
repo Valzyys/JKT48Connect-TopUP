@@ -77,12 +77,11 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 - **Catalog outages** keep the last successful sync and mark it stale. Products missing from a newer sync become unavailable.
 
 ## Storefront design
-
-- **Concept:** the storefront is a price list, like a konter pulsa board. Every game, denomination and price is on the home page, with dotted leaders between item and price. Clicking a price opens the game page with that denomination selected. There is no marketing hero and no generated artwork; everything shown is live catalog data.
-- **Order page:** the order page is a receipt. When payment is verified it gets a "LUNAS" rubber stamp, and when the top-up lands a "BERHASIL" stamp. If the page sees the change live, GSAP presses the stamp down (`components/Stamp.tsx`).
-- **Other motion:** price rows print in as a board scrolls into view, and the order progress bars fill. All motion is skipped under `prefers-reduced-motion`.
-- **Typography:** game names use Archivo condensed; UI text is Geist, and prices are Geist Mono.
-- **Game artwork:** none ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
+- **One checkout page.** `/` and `/game/<slug>` show the same screen: the game picker at the top, the account fields, the denomination tiles, and a summary with the pay button (a bottom bar on phones). The catalog loads once, so switching games is instant. `?item=<code>` preselects a denomination.
+- **Order page.** It shows the status, a three-step progress bar (Bayar, Diproses, Selesai), the QRIS with a countdown, the SN once the top-up is done, and the order details. When the page sees the payment confirmed or the top-up finish live, GSAP springs the status icon in, fills the progress bar, and a toast appears. All motion is skipped under `prefers-reduced-motion`.
+- **Errors.** A render error shows a message and a reload button under the normal header instead of a blank page. The error boundary resets on every page change, and a stale JS chunk after a redeploy triggers one automatic reload.
+- **Type and colour.** The platform's own UI font (no web fonts), a warm neutral palette, and one red accent for selection and the pay button. Light and dark themes.
+- **Game artwork.** None ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
 
 ## Pricing
 

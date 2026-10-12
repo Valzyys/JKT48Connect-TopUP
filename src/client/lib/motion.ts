@@ -1,11 +1,7 @@
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-gsap.registerPlugin(useGSAP, ScrollTrigger);
-
-/** Strong ease-out used across the storefront (matches --ease-out in CSS). */
-export const EASE = "expo.out";
+gsap.registerPlugin(useGSAP);
 
 /**
  * Runs `setup` only when the visitor has not asked for reduced motion.
@@ -18,4 +14,4 @@ export function motionOK(setup: () => void) {
   return mm;
 }
 
-export { gsap, ScrollTrigger, useGSAP };
+export { gsap, useGSAP };
