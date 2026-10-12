@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import type { CustomerStatus, OrderView } from "../../shared/api";
 import { Button, Notice, Skeleton } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
-import { countdown, idr, wibDateTime, wibTime } from "../lib/format";
+import { countdown, idr, shortLabel, wibDateTime, wibTime } from "../lib/format";
+import { themeFor } from "../lib/gameTheme";
 import { gsap, useGSAP } from "../lib/motion";
 import { readKeyFromHash, saveOrder, tokenFor } from "../lib/storage";
 
@@ -216,10 +217,16 @@ export function Order() {
 
   const pay = order.payment;
   const hint = hintFor(order.status);
+  const theme = themeFor(order.game.slug);
 
   return (
-    <Shell>
-      <Card>
+    <Shell style={{ "--game": theme.color, "--game-ink": theme.ink } as React.CSSProperties}>
+      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-raised">
+        <div className="flex items-center justify-between gap-3 bg-[var(--game)] px-4 py-2.5 text-sm font-semibold text-[var(--game-ink)] sm:px-5">
+          <span>{order.game.name}</span>
+          <span className="truncate font-normal opacity-80">{shortLabel(order.product.label, order.game.name)}</span>
+        </div>
+        <div className="p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
           <span className="flex items-center gap-2 text-ink-3">
             Pesanan <CopyText value={order.ref} label="Nomor pesanan disalin" />
@@ -236,7 +243,8 @@ export function Order() {
           </div>
         </div>
         <Steps status={order.status} animate={advanced} />
-      </Card>
+        </div>
+      </section>
 
       {(order.status === "WAITING_PAYMENT" || order.status === "CANCELLING") && pay && (pay.qrImage || pay.paymentUrl) ? <PaymentCard order={order} /> : null}
 
@@ -310,8 +318,12 @@ export function Order() {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
-  return <div className="mx-auto grid w-full max-w-lg gap-3 px-4 py-6 sm:py-10">{children}</div>;
+function Shell({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div className="mx-auto grid w-full max-w-lg gap-3 px-4 py-6 sm:py-10" style={style}>
+      {children}
+    </div>
+  );
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -372,7 +384,7 @@ function Steps({ status, animate }: { status: CustomerStatus; animate: boolean }
           <li key={label} className="grid gap-1.5" aria-current={current ? "step" : undefined}>
             <span className="h-1 overflow-hidden rounded-full bg-surface-3">
               {/* Inline transform: GSAP owns this element's transform. */}
-              <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full ${current && stopped ? "bg-danger" : done && i === 2 ? "bg-success" : "bg-ink"}`} />
+              <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full ${current && stopped ? "bg-danger" : done && i === 2 ? "bg-success" : "bg-[var(--game,var(--ink))]"}`} />
             </span>
             <span className={`text-xs ${done || current ? "text-ink" : "text-ink-3"}`}>
               {label}

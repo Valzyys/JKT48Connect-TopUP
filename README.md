@@ -77,10 +77,16 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 - **Catalog outages** keep the last successful sync and mark it stale. Products missing from a newer sync become unavailable.
 
 ## Storefront design
-- **One checkout page.** `/` and `/game/<slug>` show the same screen: the game picker at the top, the account fields, the denomination tiles, and a summary with the pay button (a bottom bar on phones). The catalog loads once, so switching games is instant. `?item=<code>` preselects a denomination.
+- **One checkout page.** `/` and `/game/<slug>` show the same screen:
+  - a coloured hero with the game picker and the game name;
+  - three numbered steps: account, denomination tiles, and a dark pay card (a bottom bar on phones);
+  - an FAQ.
+  
+  The catalog loads once, so switching games is instant. `?item=<code>` preselects a denomination.
+- **Per-game colour.** Each game has its own colour and currency icon (`src/client/lib/gameTheme.ts`). When the visitor switches games, GSAP blends the page from one game's colour to the next. Denomination tiles show one to three currency icons, so pack size reads at a glance. The hero shows the game's last completed top-up from `/api/activity` (real orders only).
 - **Order page.** It shows the status, a three-step progress bar (Bayar, Diproses, Selesai), the QRIS with a countdown, the SN once the top-up is done, and the order details. When the page sees the payment confirmed or the top-up finish live, GSAP springs the status icon in, fills the progress bar, and a toast appears. All motion is skipped under `prefers-reduced-motion`.
 - **Errors.** A render error shows a message and a reload button under the normal header instead of a blank page. The error boundary resets on every page change, and a stale JS chunk after a redeploy triggers one automatic reload.
-- **Type and colour.** The platform's own UI font (no web fonts), a warm neutral palette, and one red accent for selection and the pay button. Light and dark themes.
+- **Type and colour.** The platform's own UI font (no web fonts) on a warm neutral base, with the game colour as the accent. Light and dark themes.
 - **Game artwork.** None ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
 
 ## Pricing

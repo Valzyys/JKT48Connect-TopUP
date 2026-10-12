@@ -1,4 +1,4 @@
-import type { ApiError, GamesResponse, NicknameResult, OrderLookupView, OrderView } from "../../shared/api";
+import type { ActivityResponse, ApiError, GamesResponse, NicknameResult, OrderLookupView, OrderView } from "../../shared/api";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -38,6 +38,7 @@ async function request<T>(path: string, init: { method?: string; body?: unknown;
 
 export const api = {
   games: (signal?: AbortSignal) => request<GamesResponse>("/api/games", { signal }),
+  activity: (signal?: AbortSignal) => request<ActivityResponse>("/api/activity", { signal }),
   nickname: (body: { game: string; userId: string; zoneId: string | null }) => request<NicknameResult>("/api/nickname-check", { body }),
   createOrder: (body: { game: string; productCode: string; userId: string; zoneId: string | null; clientToken: string }) =>
     request<OrderView>("/api/orders", { body }),

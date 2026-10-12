@@ -27,3 +27,15 @@ export function shortLabel(label: string, gameName: string): string {
   const stripped = label.replace(new RegExp(`^${gameName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "").trim();
   return stripped || label;
 }
+
+const relative = new Intl.RelativeTimeFormat("id-ID", { numeric: "auto" });
+
+/** "2 menit yang lalu", "kemarin". */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const seconds = Math.round((Date.parse(iso) - now) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return "baru saja";
+  if (abs < 3600) return relative.format(Math.round(seconds / 60), "minute");
+  if (abs < 86400) return relative.format(Math.round(seconds / 3600), "hour");
+  return relative.format(Math.round(seconds / 86400), "day");
+}
