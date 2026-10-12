@@ -28,12 +28,6 @@ export function shortLabel(label: string, gameName: string): string {
   return stripped || label;
 }
 
-export function initials(name: string): string {
-  const words = name.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
-  return (words[0]![0]! + words[words.length - 1]![0]!).toUpperCase();
-}
-
 const relative = new Intl.RelativeTimeFormat("id-ID", { numeric: "auto" });
 
 /** "2 menit yang lalu", "kemarin". */

@@ -1,51 +1,81 @@
 import { ArrowSquareOut, Check, CheckCircle, Clock, Copy, Hourglass, LinkSimple, Warning, XCircle } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { toast } from "sonner";
 import type { CustomerStatus, OrderView } from "../../shared/api";
-import { Stamp, type StampKind } from "../components/Stamp";
 import { Button, Notice, Skeleton } from "../components/ui";
-import { EASE, gsap, motionOK, useGSAP } from "../lib/motion";
 import { api, ApiRequestError } from "../lib/api";
-import { countdown, idr, wibDateTime, wibTime } from "../lib/format";
+import { countdown, idr, shortLabel, wibDateTime, wibTime } from "../lib/format";
+import { themeFor } from "../lib/gameTheme";
+import { gsap, useGSAP } from "../lib/motion";
 import { readKeyFromHash, saveOrder, tokenFor } from "../lib/storage";
 
-const STAGES = ["Pembayaran", "Diproses", "Selesai"] as const;
+const STEPS = ["Bayar", "Diproses", "Selesai"] as const;
 
-function stageOf(status: CustomerStatus): { index: number; failed: boolean } {
+/** How far along the order is (0-3), and whether it stopped there. */
+function stepOf(status: CustomerStatus): { at: number; stopped: boolean } {
   switch (status) {
     case "SUCCESS":
-      return { index: 3, failed: false };
+      return { at: 3, stopped: false };
+    case "PAID":
     case "PROCESSING":
     case "VERIFYING":
-    case "PAID":
-      return { index: 1, failed: false };
+      return { at: 1, stopped: false };
     case "FAILED":
-      return { index: 1, failed: true };
+      return { at: 1, stopped: true };
     case "CANCELLED":
     case "EXPIRED":
     case "PAYMENT_ERROR":
-      return { index: 0, failed: true };
+      return { at: 0, stopped: true };
     default:
-      return { index: 0, failed: false };
+      return { at: 0, stopped: false };
   }
 }
 
-function tone(status: CustomerStatus): { cls: string; Icon: typeof Check } {
+type Kind = "wait" | "work" | "done" | "bad" | "off";
+
+function kindOf(status: CustomerStatus): Kind {
   switch (status) {
     case "SUCCESS":
-      return { cls: "bg-success-soft text-success", Icon: CheckCircle };
+      return "done";
     case "FAILED":
     case "PAYMENT_ERROR":
-      return { cls: "bg-danger-soft text-danger", Icon: Warning };
+      return "bad";
     case "CANCELLED":
     case "EXPIRED":
-      return { cls: "bg-surface-2 text-ink-2", Icon: XCircle };
+      return "off";
     case "WAITING_PAYMENT":
     case "CREATING_PAYMENT":
-      return { cls: "bg-accent-soft text-accent", Icon: Clock };
+      return "wait";
     default:
-      return { cls: "bg-warning-soft text-warning", Icon: Hourglass };
+      return "work";
+  }
+}
+
+const MARKS: Record<Kind, { Icon: typeof Check; cls: string }> = {
+  wait: { Icon: Clock, cls: "bg-surface-2 text-ink-2" },
+  work: { Icon: Hourglass, cls: "bg-warning-soft text-warning" },
+  done: { Icon: CheckCircle, cls: "bg-success-soft text-success" },
+  bad: { Icon: Warning, cls: "bg-danger-soft text-danger" },
+  off: { Icon: XCircle, cls: "bg-surface-2 text-ink-3" },
+};
+
+/** One line under the server's status message: what the guest should do now. */
+function hintFor(status: CustomerStatus): string | null {
+  switch (status) {
+    case "WAITING_PAYMENT":
+      return "Scan QR di bawah sebelum batas waktu. Status berubah sendiri setelah pembayaran masuk.";
+    case "PAID":
+    case "PROCESSING":
+    case "VERIFYING":
+    case "VERIFYING_PAYMENT":
+      return "Biasanya selesai dalam beberapa menit. Halaman ini diperbarui sendiri.";
+    case "FAILED":
+      return "Simpan nomor pesanan ini. Admin akan menindaklanjuti.";
+    case "EXPIRED":
+      return "QRIS ini tidak bisa dipakai lagi. Buat pesanan baru bila masih ingin top-up.";
+    default:
+      return null;
   }
 }
 
@@ -66,45 +96,21 @@ export function Order() {
   const [busy, setBusy] = useState<"cancel" | "retry" | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const startedAt = useRef(Date.now());
-  const ticketRef = useRef<HTMLElement>(null);
   const prevStatus = useRef<CustomerStatus | null>(null);
-  const [slam, setSlam] = useState(false);
+  // Set when this page saw the order advance live, so the change is animated.
+  const [advanced, setAdvanced] = useState(false);
 
-  // The stamp slams only for transitions seen live on this page; on a reload it is simply there.
   useEffect(() => {
     if (!order) return;
     const prev = prevStatus.current;
     prevStatus.current = order.status;
     if (!prev || prev === order.status) return;
-    const before = stampFor(prev);
-    const now = stampFor(order.status);
-    if (now && now !== before) {
-      setSlam(true);
-      if (now === "paid") toast.success("Pembayaran terkonfirmasi", { description: "Top-up sedang diproses." });
-      if (now === "success") toast.success("Top-up berhasil", { description: "Item sudah dikirim ke akunmu." });
+    if (stepOf(order.status).at > stepOf(prev).at || kindOf(order.status) === "done") {
+      setAdvanced(true);
+      if (stepOf(prev).at === 0 && stepOf(order.status).at >= 1) toast.success("Pembayaran diterima", { description: "Top-up sedang diproses." });
+      if (order.status === "SUCCESS") toast.success("Top-up berhasil", { description: "Item sudah masuk ke akunmu." });
     }
   }, [order?.status]);
-
-  // Ticket entrance on first load, and the SN reveal whenever it appears.
-  const loaded = order !== null;
-  useGSAP(
-    () => {
-      if (!loaded) return;
-      motionOK(() => {
-        gsap.from("[data-ticket-part]", { y: 18, opacity: 0, duration: 0.7, ease: EASE, stagger: 0.07 });
-      });
-    },
-    { scope: ticketRef, dependencies: [loaded] },
-  );
-  useGSAP(
-    () => {
-      if (order?.status !== "SUCCESS") return;
-      motionOK(() => {
-        gsap.from("[data-sn] > *", { y: 12, opacity: 0, duration: 0.6, ease: EASE, stagger: 0.08, delay: slam ? 0.7 : 0.3 });
-      });
-    },
-    { scope: ticketRef, dependencies: [order?.status] },
-  );
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -177,7 +183,7 @@ export function Order() {
         <Notice tone="warning" title="Pesanan tidak bisa dibuka di sini">
           Link pesanan berisi kunci akses. Buka link lengkap yang kamu simpan, atau cari dengan nomor pesanan dan ID game.
         </Notice>
-        <Link to="/cek" className="press mt-4 inline-flex h-11 items-center rounded-button border border-line-strong bg-surface px-4 font-medium hover:bg-surface-2">
+        <Link to="/cek" className="press mt-4 inline-flex h-10 items-center rounded-button border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-surface-2">
           Cari pesanan
         </Link>
       </Shell>
@@ -188,93 +194,100 @@ export function Order() {
     return (
       <Shell>
         {error ? (
-          <Notice tone="danger" title="Status belum bisa dimuat" action={<Button size="sm" variant="secondary" onClick={() => void load()}>Coba lagi</Button>}>
+          <Notice
+            tone="danger"
+            title="Status belum bisa dimuat"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => void load()}>
+                Coba lagi
+              </Button>
+            }
+          >
             {error.message}
           </Notice>
         ) : (
-          <div className="rounded-ticket border border-line bg-surface p-6" aria-busy aria-label="Memuat pesanan">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="mt-6 h-2 w-full" />
-            <Skeleton className="mx-auto mt-8 size-56" />
-            <Skeleton className="mt-6 h-5 w-full" />
+          <div className="grid gap-3" aria-busy aria-label="Memuat pesanan">
+            <Skeleton className="h-44 rounded-card" />
+            <Skeleton className="h-80 rounded-card" />
           </div>
         )}
       </Shell>
     );
   }
 
-  const { cls, Icon } = tone(order.status);
-  const stampKind = stampFor(order.status);
-  const stage = stageOf(order.status);
   const pay = order.payment;
+  const hint = hintFor(order.status);
+  const theme = themeFor(order.game.slug);
 
   return (
-    <Shell>
-      <article ref={ticketRef} data-ticket className="relative overflow-hidden rounded-ticket border border-line bg-surface shadow-raised">
-        <header data-ticket-part className="p-5 sm:p-6">
-          <p className="display text-[2rem] sm:text-[2.4rem]">{order.game.name}</p>
-          <p className="mt-1 text-ink-2">{order.product.label}</p>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-4">
-            <div>
-              <p className="text-sm text-ink-3">Nomor pesanan</p>
-              <CopyText value={order.ref} className="mt-0.5 text-lg font-semibold" label="Nomor pesanan disalin" />
+    <Shell style={{ "--game": theme.color, "--game-ink": theme.ink } as React.CSSProperties}>
+      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-raised">
+        <div className="flex items-center justify-between gap-3 bg-[var(--game)] px-4 py-2.5 text-sm font-semibold text-[var(--game-ink)] sm:px-5">
+          <span>{order.game.name}</span>
+          <span className="truncate font-normal opacity-80">{shortLabel(order.product.label, order.game.name)}</span>
+        </div>
+        <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+          <span className="flex items-center gap-2 text-ink-3">
+            Pesanan <CopyText value={order.ref} label="Nomor pesanan disalin" />
+          </span>
+          <span className="text-ink-3">{wibDateTime(order.createdAt)}</span>
+        </div>
+        <div className="mt-4 flex items-start gap-3">
+          <StatusMark kind={kindOf(order.status)} animate={advanced} />
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold leading-snug" aria-live="polite">
+              {order.message}
+            </h1>
+            {hint ? <p className="mt-1 text-sm text-ink-2">{hint}</p> : null}
+          </div>
+        </div>
+        <Steps status={order.status} animate={advanced} />
+        </div>
+      </section>
+
+      {(order.status === "WAITING_PAYMENT" || order.status === "CANCELLING") && pay && (pay.qrImage || pay.paymentUrl) ? <PaymentCard order={order} /> : null}
+
+      {order.status === "SUCCESS" && order.fulfillment ? (
+        <Card>
+          <p className="text-sm text-ink-3">Nomor seri (SN)</p>
+          {order.fulfillment.sn ? (
+            <div className="mt-1">
+              <CopyText value={order.fulfillment.sn} label="SN disalin" />
             </div>
-            {stampKind ? (
-              <Stamp kind={stampKind} date={stampDate(order, stampKind)} slam={slam} onLanded={() => setSlam(false)} />
-            ) : (
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${cls}`}>
-                <Icon size={16} weight="bold" aria-hidden />
-                {statusLabel(order.status)}
-              </span>
-            )}
-          </div>
-          <p className="mt-4 text-[15px] text-ink" aria-live="polite">
-            {order.message}
-          </p>
-          <Progress index={stage.index} failed={stage.failed} />
-        </header>
+          ) : (
+            <p className="mt-1 text-ink-2">Tidak dikirim penyedia.</p>
+          )}
+          {order.fulfillment.completedAt ? <p className="mt-2 text-sm text-ink-3">Selesai {wibDateTime(order.fulfillment.completedAt)}</p> : null}
+        </Card>
+      ) : null}
 
-        {order.status === "WAITING_PAYMENT" || order.status === "CANCELLING" ? (
-          pay && (pay.qrImage || pay.paymentUrl) ? <PaymentBlock order={order} /> : null
-        ) : null}
+      {order.status === "PAYMENT_ERROR" ? (
+        <Card>
+          <Button onClick={retry} loading={busy === "retry"}>
+            Buat QRIS lagi
+          </Button>
+        </Card>
+      ) : null}
 
-        {order.status === "SUCCESS" && order.fulfillment ? (
-          <section data-sn className="perforation bg-success-soft/40 px-5 py-5 sm:px-6" aria-label="Bukti top-up">
-            <p className="text-sm text-ink-3">Nomor seri (SN)</p>
-            {order.fulfillment.sn ? <CopyText value={order.fulfillment.sn} className="mt-1 text-base" label="SN disalin" /> : <p className="mt-1 text-ink-2">Tidak dikirim penyedia.</p>}
-            {order.fulfillment.completedAt ? <p className="mt-2 text-sm text-ink-3">Selesai {wibDateTime(order.fulfillment.completedAt)}</p> : null}
-          </section>
-        ) : null}
+      <Card>
+        <h2 className="text-[15px] font-semibold">Detail</h2>
+        <dl className="mt-3 grid gap-2 text-sm">
+          <Row k="Game" v={order.game.name} />
+          <Row k="Nominal" v={order.product.label} />
+          <Row k="ID akun" v={`${order.account.userId}${order.account.zoneId ? ` (${order.account.zoneId})` : ""}`} />
+          {order.account.nickname ? <Row k="Nama akun" v={order.account.nickname} /> : null}
+          <Row k="Harga" v={idr(order.price)} />
+          {pay?.adjustment ? <Row k="Biaya gateway" v={`+${idr(pay.adjustment)}`} /> : null}
+          {pay?.invoiceAmount ? <Row k="Total tagihan" v={idr(pay.invoiceAmount)} strong /> : null}
+        </dl>
+      </Card>
 
-        {order.status === "PAYMENT_ERROR" ? (
-          <section className="perforation px-5 py-5 sm:px-6">
-            <Button onClick={retry} loading={busy === "retry"}>
-              Buat QRIS lagi
-            </Button>
-          </section>
-        ) : null}
-
-        <section className="perforation px-5 py-5 sm:px-6" aria-label="Detail pesanan">
-          <dl className="grid gap-2.5 text-sm">
-            <Row k="Game" v={order.game.name} />
-            <Row k="Nominal" v={order.product.label} />
-            <Row k="ID akun" v={`${order.account.userId}${order.account.zoneId ? ` (${order.account.zoneId})` : ""}`} mono />
-            {order.account.nickname ? <Row k="Nama akun" v={order.account.nickname} /> : null}
-            <Row k="Harga" v={idr(order.price)} mono />
-            {pay?.adjustment ? <Row k="Penyesuaian gateway" v={`+${idr(pay.adjustment)}`} mono /> : null}
-            {pay?.invoiceAmount ? <Row k="Total tagihan" v={idr(pay.invoiceAmount)} mono strong /> : null}
-            <Row k="Dibuat" v={wibDateTime(order.createdAt)} />
-          </dl>
-        </section>
-      </article>
-
-      <div className="mt-5 grid gap-3">
-        <Notice tone="info" title="Simpan link halaman ini">
-          Link berisi kunci akses pesanan. Siapa pun yang memegang link ini bisa melihat statusnya.
-          <div className="mt-2">
-            <CopyLinkButton href={`${location.pathname}#k=${token}`} />
-          </div>
-        </Notice>
+      <div className="grid gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
+          <CopyLinkButton href={`${location.pathname}#k=${token}`} />
+          <span>Simpan link ini. Siapa pun yang memegangnya bisa melihat status pesanan.</span>
+        </div>
         {order.canCancel ? (
           confirmCancel ? (
             <div className="rounded-card border border-line bg-surface p-4" role="group" aria-label="Konfirmasi pembatalan">
@@ -290,14 +303,14 @@ export function Order() {
               </div>
             </div>
           ) : (
-            <Button variant="ghost" className="justify-self-start" onClick={() => setConfirmCancel(true)}>
+            <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => setConfirmCancel(true)}>
               Batalkan pesanan
             </Button>
           )
         ) : null}
-        {order.status === "SUCCESS" ? (
-          <Link to="/" className="text-sm text-ink-2 underline-offset-4 hover:text-ink hover:underline">
-            Top-up lagi
+        {order.terminal ? (
+          <Link to={`/game/${order.game.slug}`} className="justify-self-start text-sm font-medium text-accent underline-offset-4 hover:underline">
+            Top-up {order.game.name} lagi
           </Link>
         ) : null}
       </div>
@@ -305,96 +318,77 @@ export function Order() {
   );
 }
 
-function stampFor(status: CustomerStatus): StampKind | null {
-  switch (status) {
-    case "PAID":
-    case "PROCESSING":
-    case "VERIFYING":
-      return "paid";
-    case "SUCCESS":
-      return "success";
-    case "FAILED":
-      return "failed";
-    case "CANCELLED":
-      return "cancelled";
-    case "EXPIRED":
-      return "expired";
-    default:
-      return null;
-  }
-}
-
-function stampDate(order: OrderView, kind: StampKind): string | null {
-  if (kind === "success" && order.fulfillment?.completedAt) return dayStamp(order.fulfillment.completedAt);
-  // MYPG's paid_at is shown as received (date part only), never reinterpreted.
-  if (kind === "paid" && order.payment?.paidAtRaw) return order.payment.paidAtRaw.slice(0, 10).split("-").reverse().join(".");
-  return dayStamp(order.updatedAt);
-}
-
-function dayStamp(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(iso)).replace(/\//g, ".");
-}
-
-function statusLabel(s: CustomerStatus): string {
-  const map: Record<CustomerStatus, string> = {
-    CREATING_PAYMENT: "Menyiapkan",
-    PAYMENT_ERROR: "QRIS gagal",
-    WAITING_PAYMENT: "Menunggu bayar",
-    VERIFYING_PAYMENT: "Diverifikasi",
-    PAID: "Dibayar",
-    PROCESSING: "Diproses",
-    VERIFYING: "Diverifikasi",
-    SUCCESS: "Berhasil",
-    FAILED: "Gagal",
-    CANCELLING: "Membatalkan",
-    CANCELLED: "Dibatalkan",
-    EXPIRED: "Kedaluwarsa",
-  };
-  return map[s];
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto w-full max-w-xl px-4 py-8 sm:py-12">{children}</div>;
-}
-
-function Row({ k, v, mono, strong }: { k: string; v: string; mono?: boolean; strong?: boolean }) {
+function Shell({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="shrink-0 text-ink-3">{k}</dt>
-      <dd className={`min-w-0 text-right [overflow-wrap:anywhere] ${mono ? "font-mono tabular" : ""} ${strong ? "font-semibold text-ink" : "text-ink"}`}>{v}</dd>
+    <div className="mx-auto grid w-full max-w-lg gap-3 px-4 py-6 sm:py-10" style={style}>
+      {children}
     </div>
   );
 }
 
-function Progress({ index, failed }: { index: number; failed: boolean }) {
+function Card({ children }: { children: ReactNode }) {
+  return <section className="rounded-card border border-line bg-surface p-4 sm:p-5">{children}</section>;
+}
+
+function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="shrink-0 text-ink-3">{k}</dt>
+      <dd className={`min-w-0 text-right tabular [overflow-wrap:anywhere] ${strong ? "font-semibold text-ink" : "text-ink"}`}>{v}</dd>
+    </div>
+  );
+}
+
+/** Status icon. When the order advances live it springs in, so the change is noticed. */
+function StatusMark({ kind, animate }: { kind: Kind; animate: boolean }) {
+  const root = useRef<HTMLSpanElement>(null);
+  const { Icon, cls } = MARKS[kind];
+  useGSAP(
+    () => {
+      if (!animate) return;
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo(root.current, { scale: 0.4, rotate: -25 }, { scale: 1, rotate: 0, duration: 0.6, ease: "back.out(2.4)" });
+      });
+    },
+    { scope: root, dependencies: [kind, animate] },
+  );
+  return (
+    <span ref={root} className={`grid size-10 shrink-0 place-items-center rounded-full ${cls}`} aria-hidden>
+      <Icon size={22} weight="fill" />
+    </span>
+  );
+}
+
+function Steps({ status, animate }: { status: CustomerStatus; animate: boolean }) {
   const root = useRef<HTMLOListElement>(null);
-  // Bars fill one after another up to the current stage; replays forward on each change.
+  const { at, stopped } = stepOf(status);
+  // The bar under each step fills up to the current one. A live change plays it;
+  // a first load or reduced motion shows the result directly.
   useGSAP(
     () => {
       const fills = gsap.utils.toArray<HTMLElement>("[data-fill]");
-      const targets = fills.map((_, i) => (i < index ? 1 : i === index && index < 3 ? 0.45 : 0));
-      const mm = gsap.matchMedia();
-      mm.add({ motion: "(prefers-reduced-motion: no-preference)", reduce: "(prefers-reduced-motion: reduce)" }, (ctx) => {
-        const motion = (ctx.conditions as { motion: boolean }).motion;
-        fills.forEach((el, i) => gsap.to(el, { scaleX: targets[i], duration: motion ? 0.8 : 0, ease: "power2.inOut", delay: motion ? i * 0.15 : 0 }));
+      fills.forEach((el, i) => {
+        const to = i < at ? 1 : i === at && at < 3 ? 0.5 : 0;
+        const play = animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        gsap.to(el, { scaleX: to, duration: play ? 0.7 : 0, ease: "power2.inOut", delay: play ? i * 0.12 : 0 });
       });
     },
-    { scope: root, dependencies: [index] },
+    { scope: root, dependencies: [at, animate] },
   );
   return (
-    <ol ref={root} className="mt-5 grid grid-cols-3 gap-2" aria-label="Tahap pesanan">
-      {STAGES.map((label, i) => {
-        const done = i < index;
-        const current = i === index && index < 3;
+    <ol ref={root} className="mt-5 grid grid-cols-3 gap-1.5" aria-label="Tahap pesanan">
+      {STEPS.map((label, i) => {
+        const done = i < at;
+        const current = i === at && at < 3;
         return (
           <li key={label} className="grid gap-1.5" aria-current={current ? "step" : undefined}>
-            <span className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-              {/* Inline transform, not a Tailwind scale utility: GSAP owns this element's transform. */}
-              <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full rounded-full ${current && failed ? "bg-danger" : "bg-accent"}`} />
+            <span className="h-1 overflow-hidden rounded-full bg-surface-3">
+              {/* Inline transform: GSAP owns this element's transform. */}
+              <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full ${current && stopped ? "bg-danger" : done && i === 2 ? "bg-success" : "bg-[var(--game,var(--ink))]"}`} />
             </span>
             <span className={`text-xs ${done || current ? "text-ink" : "text-ink-3"}`}>
               {label}
-              <span className="sr-only">{done ? ", selesai" : current ? (failed ? ", terhenti" : ", berlangsung") : ""}</span>
+              <span className="sr-only">{done ? ", selesai" : current ? (stopped ? ", terhenti" : ", berlangsung") : ""}</span>
             </span>
           </li>
         );
@@ -403,7 +397,7 @@ function Progress({ index, failed }: { index: number; failed: boolean }) {
   );
 }
 
-function PaymentBlock({ order }: { order: OrderView }) {
+function PaymentCard({ order }: { order: OrderView }) {
   const pay = order.payment!;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -413,47 +407,37 @@ function PaymentBlock({ order }: { order: OrderView }) {
   const left = pay.expiresAt ? Date.parse(pay.expiresAt) - now : null;
   const amount = pay.invoiceAmount ?? pay.requestedAmount;
   return (
-    <section className="perforation px-5 py-6 sm:px-6" aria-label="Pembayaran QRIS">
-      <div className="text-center">
-        <p className="text-sm text-ink-2">Bayar tepat</p>
-        <p className="mt-1 font-mono text-[2rem] font-semibold leading-none tracking-tight tabular">{idr(amount)}</p>
-        {pay.adjustment ? (
-          <p className="mt-2 text-sm text-ink-3">
-            Termasuk penyesuaian <span className="font-mono tabular">{idr(pay.adjustment)}</span> dari gateway QRIS.
-          </p>
+    <Card>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[15px] font-semibold">Bayar dengan QRIS</h2>
+        {left !== null ? (
+          <span className={`text-sm tabular ${left > 0 && left < 120_000 ? "text-danger" : "text-ink-2"}`}>
+            {left > 0 ? `Sisa ${countdown(left)}` : "Waktu habis"}
+          </span>
         ) : null}
       </div>
+      <p className="mt-3 text-sm text-ink-2">Bayar tepat</p>
+      <p className="text-3xl font-semibold tracking-tight tabular">{idr(amount)}</p>
+      {pay.adjustment ? <p className="mt-1 text-sm text-ink-3">Termasuk biaya gateway {idr(pay.adjustment)}.</p> : null}
       {pay.qrImage ? (
-        <div className="mx-auto mt-5 w-fit rounded-card bg-[oklch(0.99_0_0)] p-3 shadow-ambient">
-          <img src={pay.qrImage} alt={`Kode QRIS untuk membayar ${idr(amount)}`} width={232} height={232} className="size-[232px] object-contain" referrerPolicy="no-referrer" />
+        <div className="mt-4 grid place-items-center rounded-control border border-line bg-white p-4">
+          <img src={pay.qrImage} alt={`Kode QRIS untuk membayar ${idr(amount)}`} width={240} height={240} className="size-[240px] object-contain" referrerPolicy="no-referrer" />
         </div>
       ) : null}
-      <div className="mt-5 grid justify-items-center gap-3 text-sm">
-        {left !== null ? (
-          <p className="flex items-center gap-1.5 text-ink-2">
-            <Clock size={16} aria-hidden />
-            {left > 0 ? (
-              <>
-                Bayar sebelum {wibTime(pay.expiresAt!)}, sisa <span className="font-mono tabular text-ink">{countdown(left)}</span>
-              </>
-            ) : (
-              "Batas waktu pembayaran sudah lewat. Status diperbarui otomatis."
-            )}
-          </p>
-        ) : null}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+        {pay.expiresAt && left !== null && left > 0 ? <span className="text-ink-3">Berlaku sampai {wibTime(pay.expiresAt)}</span> : <span />}
         {pay.paymentUrl ? (
-          <a href={pay.paymentUrl} target="_blank" rel="noopener noreferrer" className="press inline-flex items-center gap-1.5 rounded-button px-3 py-2 font-medium text-accent hover:bg-accent-soft">
+          <a href={pay.paymentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent underline-offset-4 hover:underline">
             Buka halaman pembayaran
-            <ArrowSquareOut size={16} aria-hidden />
+            <ArrowSquareOut size={15} aria-hidden />
           </a>
         ) : null}
-        <p className="max-w-[38ch] text-center text-ink-3">Status berubah otomatis setelah pembayaran terverifikasi. Halaman ini tidak perlu dimuat ulang.</p>
       </div>
-    </section>
+    </Card>
   );
 }
 
-function CopyText({ value, className = "", label }: { value: string; className?: string; label: string }) {
+function CopyText({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -468,11 +452,11 @@ function CopyText({ value, className = "", label }: { value: string; className?:
           toast.error("Tidak bisa menyalin. Salin manual.");
         }
       }}
-      className={`press group inline-flex max-w-full items-center gap-2 rounded-control text-left font-mono tabular text-ink ${className}`}
+      className="press group inline-flex max-w-full items-center gap-1.5 rounded-control text-left font-mono font-medium text-ink"
       aria-label={`Salin ${value}`}
     >
       <span className="[overflow-wrap:anywhere]">{value}</span>
-      {copied ? <Check size={16} className="shrink-0 text-success" aria-hidden /> : <Copy size={16} className="shrink-0 text-ink-3 group-hover:text-ink" aria-hidden />}
+      {copied ? <Check size={15} className="shrink-0 text-success" aria-hidden /> : <Copy size={15} className="shrink-0 text-ink-3 group-hover:text-ink" aria-hidden />}
     </button>
   );
 }
@@ -492,7 +476,7 @@ function CopyLinkButton({ href }: { href: string }) {
       }}
     >
       <LinkSimple size={16} aria-hidden />
-      Salin link pesanan
+      Salin link
     </Button>
   );
 }

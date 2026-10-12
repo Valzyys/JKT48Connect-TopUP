@@ -38,13 +38,13 @@ export function Lookup() {
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="mx-auto grid max-w-5xl gap-8 px-4 py-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section aria-labelledby="lookup-title">
-        <h1 id="lookup-title" className="text-3xl font-semibold tracking-tight">
+        <h1 id="lookup-title" className="text-xl font-semibold">
           Cek pesanan
         </h1>
         <p className="mt-2 max-w-[44ch] text-ink-2">Masukkan nomor pesanan dan ID game yang dipakai saat membeli.</p>
-        <form onSubmit={submit} noValidate className="mt-6 grid gap-4 rounded-card border border-line bg-surface p-5 shadow-ambient sm:p-6">
+        <form onSubmit={submit} noValidate className="mt-6 grid gap-4 rounded-card border border-line bg-surface p-4 sm:p-5">
           <Field label="Nomor pesanan" hint="Contoh: JC-7K3FQ-W2P7Q9" htmlFor={refId}>
             <Input id={refId} value={ref} onChange={(e) => setRef(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} mono maxLength={20} aria-describedby={`${refId}-hint`} />
           </Field>
@@ -79,7 +79,7 @@ export function Lookup() {
       </section>
 
       <section aria-labelledby="device-title">
-        <h2 id="device-title" className="text-lg font-semibold tracking-tight lg:mt-[3.25rem]">
+        <h2 id="device-title" className="text-[15px] font-semibold lg:mt-[2.6rem]">
           Di perangkat ini
         </h2>
         {orders.length === 0 ? (
