@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jkt48connect-topup",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jkt48connect-topup",
+      // Replace with the id printed by `wrangler d1 create jkt48connect-topup`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Reconciliation: catalog refresh, payment checks, fulfillment checks.
+  "triggers": { "crons": ["* * * * *"] },
+  // Non-secret configuration. Secrets (MYPG_API_KEY, OKECONNECT_CATALOG_ID,
+  // ADMIN_TOKEN) are set with `wrangler secret put`, never committed.
+  "vars": {
+    "TOPUP_H2H_BASE": "https://h2h.jkt48connect.com",
+    "MYPG_BASE": "https://yobasepay.net/api_my",
+    "OKECONNECT_CATALOG_URL": "https://www.okeconnect.com/harga/json",
+    "OKECONNECT_CATALOG_PRODUK": "digital",
+    "PRICE_MARKUP_PERCENT": "5",
+    "PRICE_MARKUP_FLAT": "500",
+    "PRICE_ROUND_TO": "100",
+    "MYPG_MAX_AMOUNT_DELTA": "1000",
+    "MYPG_TIME_OFFSET": "+07:00",
+    "MYPG_DEFAULT_TTL_MINUTES": "30",
+    "CATALOG_TTL_SECONDS": "900"
+  },
+  "observability": { "enabled": true }
+}
