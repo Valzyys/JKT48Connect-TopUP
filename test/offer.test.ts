@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOffer } from "../src/client/lib/offer";
+import { categoryOf, parseOffer } from "../src/client/lib/offer";
 
 describe("denomination labels", () => {
   it("reads amount, bonus and unit from live catalog labels", () => {
@@ -14,5 +14,19 @@ describe("denomination labels", () => {
     expect(parseOffer("Mobile Legend Twilight Pass", "Mobile Legends", "Diamonds")).toEqual({ kind: "pack", title: "Twilight Pass" });
     expect(parseOffer("1X Weekly Diamond Pass 220 (80+20/Hari)", "Mobile Legends", "Diamonds").kind).toBe("pack");
     expect(parseOffer("Membership Mingguan 50 Diamond", "Free Fire", "Diamonds").kind).toBe("pack");
+  });
+});
+
+describe("denomination categories", () => {
+  const cat = (label: string, game = "Mobile Legends") => categoryOf(parseOffer(label, game, "Diamonds"));
+  it("sorts passes, level-up passes and bundles into their own tabs", () => {
+    expect(cat("86 (78+8) Diamond Mobile Legend")).toBe("amount");
+    expect(cat("Starlight Membership")).toBe("pass");
+    expect(cat("1X Weekly Diamond Pass 220 (80+20/Hari)")).toBe("pass");
+    expect(cat("Mobile Legend Weekly Elite Bundle")).toBe("pass"); // "weekly" wins: it renews like a pass
+    expect(cat("Membership Level Up Pass - Level 6", "Free Fire")).toBe("levelup");
+    expect(cat("Booyah Pass (BP CARD)", "Free Fire")).toBe("pass");
+    expect(cat("Top Up Starfall Supplies", "Delta Force")).toBe("bundle");
+    expect(cat("Arena Breakout Pilihan Pemula", "Arena Breakout")).toBe("bundle");
   });
 });

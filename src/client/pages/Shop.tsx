@@ -1,4 +1,4 @@
-import { ArrowRight, CaretDown, CheckCircle, Crown, Headset, Lightning, MagnifyingGlass, QrCode, Receipt, ShieldCheck, Sparkle, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, CaretDown, Circle, Package, TrendUp, CheckCircle, Crown, Headset, Lightning, MagnifyingGlass, QrCode, Receipt, ShieldCheck, Sparkle, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ import { Poster } from "../components/Poster";
 import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, shortLabel, timeAgo } from "../lib/format";
-import { parseOffer } from "../lib/offer";
+import { categoryLabel, categoryOf, parseOffer, sortCategories } from "../lib/offer";
 import { type GameTheme, BRAND, mixHex, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { scrollToElement } from "../lib/smoothScroll";
@@ -125,6 +125,20 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
     { scope: root, dependencies: [game?.slug] },
   );
 
+  // Parallax as the hero scrolls away: copy sinks and fades, the gradient
+  // swells, the poster rises at its own pace. Tied to scroll position (scrub).
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        const scrollTrigger = { trigger: root.current, start: "top top", end: "bottom top", scrub: 0.6 };
+        gsap.to("[data-parallax-copy]", { yPercent: 22, opacity: 0.25, ease: "none", scrollTrigger });
+        gsap.to("[data-parallax-bg]", { scale: 1.15, yPercent: 10, ease: "none", scrollTrigger });
+        gsap.to("[data-parallax-card]", { yPercent: -30, ease: "none", scrollTrigger });
+      });
+    },
+    { scope: root },
+  );
+
   // The poster drifts gently and leans toward the pointer (mouse and pen only).
   useGSAP(
     () => {
@@ -163,7 +177,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
     <section ref={root} className="relative -mt-16 overflow-hidden rounded-b-[40px] text-[var(--game-ink)] sm:rounded-b-[56px]">
       {/* CSS gradient underneath: shows while WebGL starts, or if it is unavailable. */}
       <div className="absolute inset-0 bg-[linear-gradient(140deg,var(--game),var(--game-deep))]" aria-hidden />
-      <div className="absolute inset-0" aria-hidden>
+      <div data-parallax-bg className="absolute inset-0" aria-hidden>
         <Grainient
           color1={theme.color}
           color2={mixHex(theme.color, "#ffffff", 0.5)}
@@ -180,7 +194,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
       </div>
       {lightInk ? <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_45%,rgb(0_0_0/0.12))]" aria-hidden /> : null}
       <div className="relative mx-auto grid max-w-5xl gap-8 px-4 pb-32 pt-28 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
-        <div className="min-w-0">
+        <div data-parallax-copy className="min-w-0">
           <GamePicker games={games} active={game?.slug ?? null} />
           <div className="mt-8 min-h-[11rem]">
             {game ? (
@@ -233,11 +247,13 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
           </div>
         </div>
         {game ? (
-          <div data-float className="relative hidden md:block">
+          <div data-parallax-card className="relative hidden md:block">
+          <div data-float>
             <div ref={card} className="relative mx-auto w-[16rem] rotate-[4deg]" style={{ transformStyle: "preserve-3d" }}>
               <div className="absolute -inset-6 rounded-[40px] bg-[var(--game-ink)] opacity-20 blur-3xl" aria-hidden />
               <Poster slug={game.slug} name={game.name} image={game.image} className="rounded-[28px] shadow-[0_40px_70px_-24px_rgb(0_0_0/0.55)] ring-4 ring-white/25" />
             </div>
+          </div>
           </div>
         ) : null}
       </div>
@@ -436,15 +452,15 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
               </Field>
             ) : null}
           </div>
-          {game.nicknameCheck ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button type="button" variant="secondary" size="sm" onClick={checkNickname} loading={checking}>
-                {!checking ? <MagnifyingGlass size={16} aria-hidden /> : null}
-                Cek nama akun
-              </Button>
-              <NicknameLine result={nickname} />
-            </div>
-          ) : null}
+          <AccountChecks
+            idOk={!errors.userId && !!userId}
+            zoneOk={config.zone ? !errors.zoneId && !!zoneId : null}
+            checkable={game.nicknameCheck}
+            supported={!!config.nicknameProduct}
+            checking={checking}
+            onCheck={checkNickname}
+            result={nickname}
+          />
         </SoftCard>
 
         <SoftCard step={2} title="Pilih nominal" note={game.productCount > 0 ? `${game.productCount} pilihan` : undefined} theme={theme}>
@@ -533,14 +549,10 @@ const COLLAPSED = 12;
  * collapsed at 12 tiles; the selected one is always visible.
  */
 function Denominations({ game, theme, selected, onSelect }: { game: GameSummary; theme: GameTheme; selected: string | null; onSelect: (code: string) => void }) {
-  const parsed = useMemo(() => game.products.map((p) => ({ p, o: parseOffer(p.label, game.name, game.currency) })), [game]);
-  const amounts = parsed.filter((x) => x.o.kind === "amount");
-  const packs = parsed.filter((x) => x.o.kind === "pack");
-  const tabs = [
-    { id: "amount", label: amounts[0]?.o.kind === "amount" ? amounts[0].o.unit : game.currency, items: amounts },
-    { id: "pack", label: "Paket & pass", items: packs },
-  ].filter((t) => t.items.length > 0);
-  const initialTab = tabs.find((t) => t.items.some((x) => x.p.code === selected))?.id ?? tabs[0]?.id ?? "amount";
+  const parsed = useMemo(() => game.products.map((p) => { const o = parseOffer(p.label, game.name, game.currency); return { p, o, c: categoryOf(o) }; }), [game]);
+  // Each game gets only the tabs its own catalog fills (e.g. Diamonds, Pass & membership, Bundle).
+  const tabs = sortCategories(parsed.map((x) => x.c)).map((id) => ({ id, label: categoryLabel(id, game.currency), items: parsed.filter((x) => x.c === id) }));
+  const initialTab: string = tabs.find((t) => t.items.some((x) => x.p.code === selected))?.id ?? tabs[0]?.id ?? "amount";
   const [tab, setTab] = useState(initialTab);
   const current = tabs.find((t) => t.id === tab) ?? tabs[0];
   const items = current?.items ?? [];
@@ -570,7 +582,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
   return (
     <div ref={grid}>
       {tabs.length > 1 ? (
-        <div role="tablist" aria-label="Jenis nominal" className="mb-4 inline-flex rounded-full bg-surface-2 p-1">
+        <div role="tablist" aria-label="Kategori" className="-mx-1 mb-4 flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -581,7 +593,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
                 setTab(t.id);
                 setOpen(false);
               }}
-              className={`press h-9 rounded-full px-4 text-sm font-semibold transition-colors ${t.id === tab ? "bg-surface text-ink shadow-[0_2px_8px_-3px_rgb(0_0_0/0.25)]" : "text-ink-3 hover:text-ink"}`}
+              className={`press h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors ${t.id === tab ? "bg-surface text-ink shadow-[0_2px_8px_-3px_rgb(0_0_0/0.25)]" : "text-ink-3 hover:text-ink"}`}
             >
               {t.label} <span className="ml-1 text-xs font-medium text-ink-3">{t.items.length}</span>
             </button>
@@ -590,7 +602,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
       ) : null}
       <ClickSpark className="text-[var(--game)]">
         <div role="radiogroup" aria-label={`Nominal ${game.name}`} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-          {shown.map(({ p, o }) => {
+          {shown.map(({ p, o, c }) => {
             const on = p.code === selected;
             const name = o.kind === "amount" ? `${o.amount.toLocaleString("id-ID")} ${o.unit}${o.bonus ? `, bonus ${o.bonus}` : ""}` : o.title;
             return (
@@ -623,7 +635,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
                 ) : (
                   <>
                     <span className="grid size-7 place-items-center rounded-full bg-surface text-[var(--game)] shadow-[0_2px_6px_-2px_rgb(0_0_0/0.2)]" aria-hidden>
-                      <Crown size={15} weight="fill" />
+                      {c === "bundle" ? <Package size={15} weight="fill" /> : c === "levelup" ? <TrendUp size={15} weight="bold" /> : <Crown size={15} weight="fill" />}
                     </span>
                     <span className="mt-auto line-clamp-2 pt-3 text-sm font-bold leading-snug">{o.title}</span>
                   </>
@@ -745,6 +757,41 @@ function SummaryRow({ k, v }: { k: string; v: string | null }) {
   );
 }
 
+/**
+ * Everything the page can check about the account before paying: the ID format
+ * (instantly, in the browser) and, where the provider offers it, the account
+ * name. A check code the provider has switched off is shown as unavailable
+ * rather than hidden, and comes back on by itself when the catalog re-enables it.
+ */
+function AccountChecks(props: { idOk: boolean; zoneOk: boolean | null; checkable: boolean; supported: boolean; checking: boolean; onCheck: () => void; result: NicknameResult | null }) {
+  const formatOk = props.idOk && props.zoneOk !== false;
+  return (
+    <div className="mt-4 grid gap-2.5 rounded-[20px] bg-surface-2/70 p-3.5">
+      <CheckRow ok={formatOk} label={formatOk ? "Format ID sesuai" : "Format ID dicek otomatis saat kamu mengetik"} />
+      {props.supported || props.checkable ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Button type="button" variant="secondary" size="sm" onClick={props.onCheck} loading={props.checking} disabled={!props.checkable} className="rounded-full">
+            {!props.checking ? <MagnifyingGlass size={16} aria-hidden /> : null}
+            Cek nama akun
+          </Button>
+          {props.checkable ? <NicknameLine result={props.result} /> : <span className="text-xs text-ink-3">Sedang dimatikan penyedia. Aktif lagi otomatis begitu tersedia.</span>}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-3">Penyedia belum menyediakan cek nama untuk game ini. Pastikan ID sama persis dengan yang di profil game.</p>
+      )}
+    </div>
+  );
+}
+
+function CheckRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <p className={`flex items-center gap-2 text-sm ${ok ? "font-semibold text-success" : "text-ink-3"}`}>
+      {ok ? <CheckCircle size={18} weight="fill" className="shrink-0" aria-hidden /> : <Circle size={18} className="shrink-0" aria-hidden />}
+      {label}
+    </p>
+  );
+}
+
 function NicknameLine({ result }: { result: NicknameResult | null }) {
   if (!result) return null;
   if (result.status === "found") {
@@ -813,6 +860,19 @@ function SideExtras() {
 
 /** Every game as a poster card, with live counts from the catalog. */
 function AllGames({ games, active }: { games: GameSummary[]; active: string | null }) {
+  const grid = useRef<HTMLUListElement>(null);
+  // Alternate columns drift against each other while the grid crosses the screen.
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.utils.toArray<HTMLElement>("[data-drift]").forEach((el, i) => {
+          const dir = i % 2 === 0 ? 1 : -1;
+          gsap.fromTo(el, { y: 26 * dir }, { y: -26 * dir, ease: "none", scrollTrigger: { trigger: grid.current, start: "top bottom", end: "bottom top", scrub: 0.8 } });
+        });
+      });
+    },
+    { scope: grid, dependencies: [games.length] },
+  );
   const live = games.filter((g) => g.productCount > 0);
   const offers = live.reduce((n, g) => n + g.productCount, 0);
   return (
@@ -831,12 +891,12 @@ function AllGames({ games, active }: { games: GameSummary[]; active: string | nu
           </dl>
         </div>
       </AnimatedContent>
-      <ul className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <ul ref={grid} className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {games.map((g, i) => {
           const on = g.slug === active;
           const t = themeFor(g.slug);
           return (
-            <li key={g.slug}>
+            <li key={g.slug} data-drift>
               <AnimatedContent delay={(i % 6) * 0.05} distance={28} className="h-full">
                 <Link
                   to={`/game/${g.slug}`}
@@ -885,8 +945,17 @@ const STEPS: [typeof Lightning, string, string][] = [
 ];
 
 function HowItWorks() {
+  const root = useRef<HTMLElement>(null);
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo("[data-num]", { yPercent: 60 }, { yPercent: -60, ease: "none", scrollTrigger: { trigger: root.current, start: "top bottom", end: "bottom top", scrub: 0.6 } });
+      });
+    },
+    { scope: root },
+  );
   return (
-    <section aria-labelledby="how-title" className="mt-16">
+    <section ref={root} aria-labelledby="how-title" className="mt-16">
       <AnimatedContent>
         <h2 id="how-title" className="text-2xl font-extrabold tracking-tight">
           Cara top-up
@@ -902,7 +971,7 @@ function HowItWorks() {
                   <span className="grid size-11 place-items-center rounded-2xl bg-[color-mix(in_oklab,var(--game)_14%,var(--surface))] text-[var(--game)]">
                     <Icon size={22} weight="fill" aria-hidden />
                   </span>
-                  <span className="text-3xl font-extrabold tabular text-ink/10" aria-hidden>
+                  <span data-num className="text-4xl font-extrabold tabular text-ink/10" aria-hidden>
                     0{i + 1}
                   </span>
                 </div>

@@ -46,5 +46,6 @@ export const api = {
   retryPayment: (ref: string, token: string) => request<OrderView>(`/api/orders/${encodeURIComponent(ref)}/payment`, { method: "POST", token }),
   cancel: (ref: string, token: string) => request<OrderView>(`/api/orders/${encodeURIComponent(ref)}/cancel`, { method: "POST", token }),
   lookup: (body: { ref: string; userId: string; zoneId: string | null }) => request<OrderLookupView>("/api/orders/lookup", { body }),
+  adminLogin: (body: { email: string; password: string }) => request<{ token: string; expiresAt: string }>("/api/admin/login", { body }),
   admin: <T>(path: string, adminToken: string, init: { method?: string; body?: unknown } = {}) => request<T>(`/api/admin${path}`, { ...init, adminToken }),
 };

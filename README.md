@@ -22,7 +22,10 @@ npm install
 npm run db:migrate:remote
 npx wrangler secret put MYPG_API_KEY
 npx wrangler secret put OKECONNECT_CATALOG_ID     # the `id` value of the catalog URL
-npx wrangler secret put ADMIN_TOKEN               # 32+ random characters, for /admin
+npx wrangler secret put ADMIN_TOKEN               # 32+ random characters; signs admin sessions
+npx wrangler secret put ADMIN_EMAIL               # the admin's login email
+npm run admin:hash                                # type the admin password, copy the printed hash
+npx wrangler secret put ADMIN_PASSWORD_HASH       # paste that hash (never the password itself)
 npm run deploy
 ```
 
@@ -92,6 +95,10 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 ## Storefront design
 The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surfaces, and the current game's colour throughout.
 
+- **Categories and checks.**
+  - Each game's denominations split into the tabs its own catalog fills: the currency (e.g. Diamonds), Pass & membership, Level Up Pass and Bundle.
+  - The account card checks the ID format as the guest types.
+  - It offers "Cek nama akun" wherever the provider has a check code. When the provider switches that code off, it is shown as unavailable, and it comes back on its own when the catalog re-enables it.
 - **One checkout page.** `/` and `/game/<slug>` show the same screen:
   - a floating glass header;
   - a hero with an animated grainy gradient in the game's colours (React Bits Grainient, WebGL, paused off-screen);
@@ -103,6 +110,11 @@ The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surface
 - **Motion.** All motion is GSAP, and every effect is skipped under `prefers-reduced-motion`.
   - Page-level: Lenis smooth scrolling is driven by the GSAP ticker and synced with ScrollTrigger (`lib/smoothScroll.ts`). The page colour blends when switching games.
   - Hero: the title animates letter by letter (GSAP SplitText), and the poster floats and tilts toward the pointer.
+  - Scroll parallax (ScrollTrigger, scrubbed):
+    - the hero copy sinks while the gradient swells and the poster rises;
+    - the game grid's columns drift against each other;
+    - step numbers float;
+    - the footer wordmark slides sideways.
   - Checkout and lower sections: cards have a pointer spotlight (SpotlightCard), tiles spark on click (ClickSpark), the pay button is magnetic (Magnet), the total counts up to a new price, and sections reveal on scroll (AnimatedContent).
 - **React Bits.** The components live in `src/client/components/bits/`. They are adapted from [React Bits](https://reactbits.dev) by David Haz (MIT + Commons Clause, which allows use inside this app). Each file notes what changed.
 - **Order page.** It shows the status, a three-step progress bar, the QRIS with a countdown, the SN when done, and the details. When the page sees the payment confirmed or the top-up finish live, the status icon springs in and a toast appears.
@@ -117,8 +129,18 @@ Admins set prices from `/admin` → **Harga & margin**:
 - **Scope of changes:** every change is written to an audit trail. New orders use the new price; existing orders keep the price they were created with.
 
 ## Admin
+`/admin` signs in with an email and password.
+- **Secrets:** the email is `ADMIN_EMAIL`. The password is stored only as a PBKDF2-SHA256 hash in `ADMIN_PASSWORD_HASH` (100k iterations, made with `npm run admin:hash`). It never appears in code, config or git.
+- **Sessions:** a successful sign-in returns a 12-hour session signed with `ADMIN_TOKEN`. `ADMIN_TOKEN` itself also still works as a bearer token for scripts.
+- **Brute-force protection:** sign-in is limited to 5 attempts per client and 10 per email every 15 minutes. A wrong email and a wrong password get the same answer.
+- **Password strength:** use a long password. Short words or names are easy to guess.
 
-`/admin` (token from `ADMIN_TOKEN`) lists orders needing attention, shows redacted provider history, re-runs reconciliation, records manual resolutions, and can start a new top-up attempt after a definitive failure. That last action asks the operator to type `RETRY`, because a resubmission can be charged twice.
+The console:
+- lists orders needing attention;
+- shows redacted provider history;
+- re-runs reconciliation and records manual resolutions;
+- manages prices and margins;
+- can start a new top-up attempt after a definitive failure. The operator must type `RETRY` first, because a resubmission can be charged twice.
 
 ## Tests
 

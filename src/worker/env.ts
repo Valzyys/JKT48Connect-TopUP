@@ -19,6 +19,8 @@ export interface Env {
   MYPG_API_KEY?: string;
   OKECONNECT_CATALOG_ID?: string;
   ADMIN_TOKEN?: string;
+  ADMIN_EMAIL?: string;
+  ADMIN_PASSWORD_HASH?: string; // from `npm run admin:hash`, never the password itself
 }
 
 export interface Config {
@@ -34,6 +36,8 @@ export interface Config {
   mypgTimeOffset: string;
   mypgDefaultTtlMinutes: number;
   adminToken: string | null;
+  adminEmail: string | null;
+  adminPasswordHash: string | null;
 }
 
 function num(value: string | undefined, fallback: number, min = 0): number {
@@ -74,5 +78,7 @@ export function loadConfig(env: Env): Config {
     mypgTimeOffset: /^[+-]\d{2}:\d{2}$/.test(offset) ? offset : "+07:00",
     mypgDefaultTtlMinutes: num(env.MYPG_DEFAULT_TTL_MINUTES, 30, 1),
     adminToken: secret(env.ADMIN_TOKEN),
+    adminEmail: secret(env.ADMIN_EMAIL)?.toLowerCase() ?? null,
+    adminPasswordHash: secret(env.ADMIN_PASSWORD_HASH),
   };
 }

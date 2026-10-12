@@ -54,3 +54,26 @@ export function parseOffer(label: string, gameName: string, currency: string): O
   const unit = (rest ?? "").trim() || currency;
   return { kind: "amount", amount: toNumber(amountRaw!), bonus: bonusRaw ? toNumber(bonusRaw) : null, unit };
 }
+
+export type CategoryId = "amount" | "pass" | "levelup" | "bundle" | "other";
+
+const CATEGORY_ORDER: CategoryId[] = ["amount", "pass", "levelup", "bundle", "other"];
+
+/** Which tab an offer belongs to; each game ends up with only the tabs its catalog fills. */
+export function categoryOf(offer: Offer): CategoryId {
+  if (offer.kind === "amount") return "amount";
+  const t = offer.title.toLowerCase();
+  if (/level\s*up/.test(t)) return "levelup";
+  if (/pass|member|weekly|mingguan|bulanan|monthly|card|starlight|twilight|booyah/.test(t)) return "pass";
+  if (/bundle|paket|pilihan|supplies|kotak|percobaan|genesis|reshape|premium|coupon|kupon/.test(t)) return "bundle";
+  return "other";
+}
+
+export function categoryLabel(id: CategoryId, currency: string): string {
+  return { amount: currency, pass: "Pass & membership", levelup: "Level Up Pass", bundle: "Bundle", other: "Lainnya" }[id];
+}
+
+export function sortCategories(ids: Iterable<CategoryId>): CategoryId[] {
+  const set = new Set(ids);
+  return CATEGORY_ORDER.filter((id) => set.has(id));
+}

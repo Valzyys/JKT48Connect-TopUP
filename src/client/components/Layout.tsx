@@ -123,10 +123,21 @@ export function Layout({ children }: { children: ReactNode }) {
 const WALLETS = ["QRIS", "GoPay", "OVO", "DANA", "ShopeePay", "LinkAja", "m-banking"];
 
 function Footer() {
+  const root = useRef<HTMLElement>(null);
+  // The big wordmark slides sideways as the footer scrolls into view.
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo("[data-wordmark]", { xPercent: 12 }, { xPercent: -8, ease: "none", scrollTrigger: { trigger: root.current, start: "top bottom", end: "bottom bottom", scrub: 0.8 } });
+        gsap.from("[data-footer-card]", { y: 40, opacity: 0, duration: 1, ease: "expo.out", stagger: 0.1, scrollTrigger: { trigger: root.current, start: "top 90%", once: true } });
+      });
+    },
+    { scope: root },
+  );
   return (
-    <footer className="mt-20 px-3 pb-3 max-lg:pb-28">
-      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-6 py-10 text-[var(--game-ink)] sm:px-10">
-        <span aria-hidden className="pointer-events-none absolute -bottom-10 -right-4 select-none text-[11rem] font-extrabold leading-none tracking-[-0.06em] opacity-[0.08] sm:text-[16rem]">
+    <footer ref={root} className="mt-20 px-3 pb-3 max-lg:pb-28">
+      <div data-footer-card className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-6 py-10 text-[var(--game-ink)] sm:px-10">
+        <span data-wordmark aria-hidden className="pointer-events-none absolute -bottom-10 -right-4 select-none text-[11rem] font-extrabold leading-none tracking-[-0.06em] opacity-[0.08] sm:text-[16rem]">
           JKT48
         </span>
         <div className="relative flex flex-wrap items-end justify-between gap-6">
@@ -147,7 +158,7 @@ function Footer() {
         </div>
       </div>
 
-      <div className="mx-auto mt-3 grid max-w-6xl gap-8 rounded-[36px] bg-surface px-6 py-10 shadow-raised ring-1 ring-line sm:px-10 md:grid-cols-[1.3fr_1fr_0.8fr_1.1fr]">
+      <div data-footer-card className="mx-auto mt-3 grid max-w-6xl gap-8 rounded-[36px] bg-surface px-6 py-10 shadow-raised ring-1 ring-line sm:px-10 md:grid-cols-[1.3fr_1fr_0.8fr_1.1fr]">
         <div>
           <div className="flex items-center gap-2.5">
             <span className="grid size-10 place-items-center rounded-full bg-[linear-gradient(140deg,var(--game),var(--game-deep))] font-extrabold text-[var(--game-ink)]">J</span>

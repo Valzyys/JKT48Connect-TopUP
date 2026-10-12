@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { AppError, type AppContext } from "../context";
-import { type CatalogRow, type FulfillmentRow, getFulfillment, getOrderById, getOrderByRef, getPayment, logEvent, type OrderRow, type PaymentRow } from "../db";
-import { safeEqual } from "../lib/ids";
+import { type CatalogRow, type FulfillmentRow, getFulfillment, getOrderById, getOrderByRef, getPayment, logEvent, type OrderRow, type PaymentRow, rateLimit } from "../db";
+import { SESSION_TTL_MS, signSession, verifyPassword, verifySession } from "../lib/adminAuth";
+import { safeEqual, sha256Hex } from "../lib/ids";
 import { iso } from "../lib/time";
 import { syncCatalog } from "../services/catalog";
 import { checkFulfillment, retryFailedFulfillment, startFulfillment } from "../services/fulfillment";
@@ -12,18 +13,45 @@ import { customerStatus } from "../services/state";
 type Vars = { Variables: { ctx: AppContext } };
 
 /**
- * Administrative reconciliation. Every route requires `Authorization: Bearer <ADMIN_TOKEN>`.
- * Provider responses shown here are already balance-redacted; secrets are never returned.
+ * Administrative reconciliation. Every route except /login requires
+ * `Authorization: Bearer <token>`, where the token is either ADMIN_TOKEN itself
+ * (scripts) or a session from /login (the console). Provider responses shown
+ * here are already balance-redacted; secrets are never returned.
  */
 export const adminRoutes = new Hono<Vars>()
   .use("*", async (c, next) => {
-    const expected = c.get("ctx").config.adminToken;
+    c.header("Cache-Control", "no-store");
+    if (c.req.path.endsWith("/admin/login")) return next();
+    const ctx = c.get("ctx");
+    const expected = ctx.config.adminToken;
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!expected) throw new AppError(503, "admin_disabled", "ADMIN_TOKEN is not configured.");
-    if (!token || !safeEqual(token, expected)) throw new AppError(401, "unauthorized", "Unauthorized.");
-    c.header("Cache-Control", "no-store");
+    const ok = !!token && (safeEqual(token, expected) || (await verifySession(expected, token, ctx.now())));
+    if (!ok) throw new AppError(401, "unauthorized", "Sesi admin berakhir. Masuk lagi.");
     await next();
+  })
+
+  // Email + password sign-in. Rate limited per client and per email, because
+  // every attempt is a password guess.
+  .post("/login", async (c) => {
+    const ctx = c.get("ctx");
+    const { adminToken, adminEmail, adminPasswordHash } = ctx.config;
+    if (!adminToken || !adminEmail || !adminPasswordHash) {
+      throw new AppError(503, "admin_disabled", "Login admin belum dikonfigurasi (ADMIN_TOKEN, ADMIN_EMAIL, ADMIN_PASSWORD_HASH).");
+    }
+    const body = (await c.req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null;
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+    const now = ctx.now();
+    const client = await sha256Hex(c.req.header("cf-connecting-ip") ?? "unknown");
+    const allowed = (await rateLimit(ctx.db, `login:c:${client}`, 5, 900, now)) && (await rateLimit(ctx.db, `login:e:${await sha256Hex(email)}`, 10, 900, now));
+    if (!allowed) throw new AppError(429, "rate_limited", "Terlalu banyak percobaan. Coba lagi 15 menit lagi.");
+    // Verify the password even for a wrong email, so timing does not reveal which part failed.
+    const passwordOk = await verifyPassword(password, adminPasswordHash);
+    if (!passwordOk || !safeEqual(email, adminEmail)) throw new AppError(401, "invalid_login", "Email atau password salah.");
+    const expiresAt = now + SESSION_TTL_MS;
+    return c.json({ token: await signSession(adminToken, expiresAt), expiresAt: iso(expiresAt) });
   })
 
   .get("/orders", async (c) => {

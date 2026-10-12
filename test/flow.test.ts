@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { syncCatalog } from "../src/worker/services/catalog";
 import { runReconcile } from "../src/worker/services/reconcile";
+import { hashPassword, verifyPassword } from "../src/worker/lib/adminAuth";
 import { CLIENT_TOKEN, catalogRoute, isH2H, isMypg, json, makeHarness, mockFetch, type Route, text } from "./helpers";
 
 /** A scriptable fake of the three providers. Every request is recorded. */
@@ -470,5 +471,50 @@ describe("admin", () => {
     expect((await h.request("/api/admin/orders")).status).toBe(401);
     const ok = await h.request("/api/admin/orders?filter=all", { headers: { authorization: "Bearer test-admin-token-0123456789abcdef" } });
     expect(ok.status).toBe(200);
+  });
+});
+
+describe("admin login", () => {
+  const EMAIL = "Owner@Example.com";
+  const PASSWORD = "correct horse battery";
+  beforeEach(async () => {
+    // Low iteration count keeps the test fast; production hashes use 100k.
+    h.env.ADMIN_EMAIL = EMAIL;
+    h.env.ADMIN_PASSWORD_HASH = await hashPassword(PASSWORD, 1000);
+  });
+
+  it("issues a session for the right email and password that opens the admin API", async () => {
+    const res = await h.request("/api/admin/login", { method: "POST", body: { email: " owner@example.com ", password: PASSWORD } });
+    expect(res.status).toBe(200);
+    const orders = await h.request("/api/admin/orders", { headers: { authorization: `Bearer ${res.body.token}` } });
+    expect(orders.status).toBe(200);
+  });
+
+  it("rejects a wrong password or email with the same answer", async () => {
+    const badPass = await h.request("/api/admin/login", { method: "POST", body: { email: EMAIL, password: "nope" } });
+    const badEmail = await h.request("/api/admin/login", { method: "POST", body: { email: "x@example.com", password: PASSWORD } });
+    expect([badPass.status, badEmail.status]).toEqual([401, 401]);
+    expect(badPass.body.error.message).toBe(badEmail.body.error.message);
+  });
+
+  it("rate limits guesses and expires sessions", async () => {
+    for (let i = 0; i < 5; i++) await h.request("/api/admin/login", { method: "POST", body: { email: EMAIL, password: `guess${i}` } });
+    const blocked = await h.request("/api/admin/login", { method: "POST", body: { email: EMAIL, password: PASSWORD } });
+    expect(blocked.status).toBe(429);
+
+    h.advance(16 * 60);
+    const ok = await h.request("/api/admin/login", { method: "POST", body: { email: EMAIL, password: PASSWORD } });
+    expect(ok.status).toBe(200);
+    h.advance(12 * 60 * 60 + 1);
+    const expired = await h.request("/api/admin/orders", { headers: { authorization: `Bearer ${ok.body.token}` } });
+    expect(expired.status).toBe(401);
+    const forged = await h.request("/api/admin/orders", { headers: { authorization: `Bearer s1.${h.now() + 60_000}.forged` } });
+    expect(forged.status).toBe(401);
+  });
+
+  it("produces hashes with the npm run admin:hash script that the Worker accepts", async () => {
+    const { hashPassword: cliHash } = await import("../scripts/admin-hash.mjs");
+    expect(await verifyPassword("some-long-passphrase", await cliHash("some-long-passphrase", 1000))).toBe(true);
+    expect(await verifyPassword("other", await cliHash("some-long-passphrase", 1000))).toBe(false);
   });
 });
