@@ -251,6 +251,23 @@ describe("MYPG", () => {
     expect(parseCheckStatus(JSON.stringify(wrongTrx), expected)).toMatchObject({ kind: "TRX_MISMATCH" });
   });
 
+  it("reads the documented fields in other formats MYPG may send", () => {
+    const variants = [
+      { status: true, data: { trx_id: expected.trxId, status: "paid", amount: 23412 } },
+      { status: true, data: { trx_id: expected.trxId, status: "Paid", amount: "23412.00" } },
+      { status: "true", data: { trx_id: expected.trxId, status: "PAID", amount: "23412" } },
+      { status: 1, data: { trx_id: expected.trxId, status: "PAID", amount: 23412 } },
+    ];
+    for (const v of variants) expect(parseCheckStatus(JSON.stringify(v), expected)).toMatchObject({ kind: "PAID", amount: 23412 });
+    const numericTrx = { status: true, data: { trx_id: 8849201, status: "PAID", amount: 23412 } };
+    expect(parseCheckStatus(JSON.stringify(numericTrx), { trxId: "8849201", amount: 23412 })).toMatchObject({ kind: "PAID" });
+    expect(parseCheckStatus(JSON.stringify({ status: true, data: { trx_id: expected.trxId, status: "unpaid", amount: 23412 } }), expected).kind).toBe("UNPAID");
+    // Looser format, same strictness: a fraction of a rupiah or another amount is never paid.
+    expect(parseCheckStatus(JSON.stringify({ status: true, data: { trx_id: expected.trxId, status: "paid", amount: "23412.50" } }), expected).kind).toBe("AMOUNT_MISMATCH");
+    expect(parseCheckStatus(JSON.stringify({ status: "yes", data: { trx_id: expected.trxId, status: "PAID", amount: 23412 } }), expected).kind).toBe("INVALID");
+    expect(parseCreatePayment(JSON.stringify({ status: "true", data: { trx_id: expected.trxId, amount: "23412.00", qr_image: "https://yobasepay.net/qr/x.png" } }))).toMatchObject({ ok: true, amount: 23412 });
+  });
+
   it("keeps undocumented statuses and malformed bodies out of the paid path", () => {
     const odd = { status: true, data: { trx_id: expected.trxId, status: "EXPIRED", amount: 23412 } };
     expect(parseCheckStatus(JSON.stringify(odd), expected)).toMatchObject({ kind: "UNDOCUMENTED", rawStatus: "EXPIRED" });
