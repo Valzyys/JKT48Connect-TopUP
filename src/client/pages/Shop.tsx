@@ -1,4 +1,4 @@
-import { CaretDown, CheckCircle, Lightning, MagnifyingGlass, QrCode, ShieldCheck, Sparkle, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, CaretDown, Circle, Package, TrendUp, CheckCircle, Crown, Headset, Lightning, MagnifyingGlass, QrCode, Receipt, ShieldCheck, Sparkle, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -14,10 +14,11 @@ import { Poster } from "../components/Poster";
 import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, shortLabel, timeAgo } from "../lib/format";
+import { categoryLabel, categoryOf, parseOffer, sortCategories } from "../lib/offer";
 import { type GameTheme, BRAND, mixHex, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { scrollToElement } from "../lib/smoothScroll";
-import { newClientToken, orderPath, saveOrder } from "../lib/storage";
+import { newClientToken, orderPath, saveOrder, savedOrders } from "../lib/storage";
 import { useTheme } from "../lib/theme";
 
 /**
@@ -50,7 +51,8 @@ export function Shop() {
     return () => ctrl.abort();
   }, [attempt]);
 
-  const games = data?.games ?? [];
+  // Games with stock first; the catalog decides the rest of the order.
+  const games = useMemo(() => [...(data?.games ?? [])].sort((a, b) => Number(b.productCount > 0) - Number(a.productCount > 0)), [data]);
   const current = slug ? games.find((g) => g.slug === slug) : (games.find((g) => g.productCount > 0) ?? games[0]);
   const config = current ? findGame(current.slug) : undefined;
   const theme = data ? themeFor(current?.slug) : BRAND;
@@ -96,6 +98,7 @@ export function Shop() {
             </SoftCard>
           )}
         </div>
+        {data ? <AllGames games={games} active={current?.slug ?? null} /> : null}
         <HowItWorks />
         <Faq />
       </div>
@@ -120,6 +123,20 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
       });
     },
     { scope: root, dependencies: [game?.slug] },
+  );
+
+  // Parallax as the hero scrolls away: copy sinks and fades, the gradient
+  // swells, the poster rises at its own pace. Tied to scroll position (scrub).
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        const scrollTrigger = { trigger: root.current, start: "top top", end: "bottom top", scrub: 0.6 };
+        gsap.to("[data-parallax-copy]", { yPercent: 22, opacity: 0.25, ease: "none", scrollTrigger });
+        gsap.to("[data-parallax-bg]", { scale: 1.15, yPercent: 10, ease: "none", scrollTrigger });
+        gsap.to("[data-parallax-card]", { yPercent: -30, ease: "none", scrollTrigger });
+      });
+    },
+    { scope: root },
   );
 
   // The poster drifts gently and leans toward the pointer (mouse and pen only).
@@ -160,7 +177,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
     <section ref={root} className="relative -mt-16 overflow-hidden rounded-b-[40px] text-[var(--game-ink)] sm:rounded-b-[56px]">
       {/* CSS gradient underneath: shows while WebGL starts, or if it is unavailable. */}
       <div className="absolute inset-0 bg-[linear-gradient(140deg,var(--game),var(--game-deep))]" aria-hidden />
-      <div className="absolute inset-0" aria-hidden>
+      <div data-parallax-bg className="absolute inset-0" aria-hidden>
         <Grainient
           color1={theme.color}
           color2={mixHex(theme.color, "#ffffff", 0.5)}
@@ -177,7 +194,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
       </div>
       {lightInk ? <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_45%,rgb(0_0_0/0.12))]" aria-hidden /> : null}
       <div className="relative mx-auto grid max-w-5xl gap-8 px-4 pb-32 pt-28 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
-        <div className="min-w-0">
+        <div data-parallax-copy className="min-w-0">
           <GamePicker games={games} active={game?.slug ?? null} />
           <div className="mt-8 min-h-[11rem]">
             {game ? (
@@ -230,11 +247,13 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
           </div>
         </div>
         {game ? (
-          <div data-float className="relative hidden md:block">
+          <div data-parallax-card className="relative hidden md:block">
+          <div data-float>
             <div ref={card} className="relative mx-auto w-[16rem] rotate-[4deg]" style={{ transformStyle: "preserve-3d" }}>
               <div className="absolute -inset-6 rounded-[40px] bg-[var(--game-ink)] opacity-20 blur-3xl" aria-hidden />
               <Poster slug={game.slug} name={game.name} image={game.image} className="rounded-[28px] shadow-[0_40px_70px_-24px_rgb(0_0_0/0.55)] ring-4 ring-white/25" />
             </div>
+          </div>
           </div>
         ) : null}
       </div>
@@ -266,7 +285,7 @@ function GamePicker({ games, active }: { games: GameSummary[]; active: string | 
     <nav aria-label="Pilih game">
       <ul
         ref={root}
-        className="flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[26px] border border-[color-mix(in_oklab,var(--game-ink)_18%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_10%,transparent)] p-2 backdrop-blur-md [scrollbar-width:none]"
+        className="flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[26px] [mask-image:linear-gradient(90deg,#000_calc(100%-2.5rem),transparent)] pr-8 border border-[color-mix(in_oklab,var(--game-ink)_18%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_10%,transparent)] p-2 backdrop-blur-md [scrollbar-width:none]"
       >
         {games.map((g) => {
           const on = g.slug === active;
@@ -300,12 +319,6 @@ function validate(spec: { pattern: string; label: string } | null, value: string
   if (!value) return `${spec.label} wajib diisi.`;
   if (!new RegExp(spec.pattern).test(value)) return `${spec.label} hanya berisi angka. Periksa kembali.`;
   return undefined;
-}
-
-/** "86 Diamonds" -> { amount: "86", unit: "Diamonds" }; other labels stay whole. */
-function splitLabel(label: string): { amount: string; unit: string } {
-  const m = /^([\d.,]+)\s+(.+)$/.exec(label);
-  return m ? { amount: m[1]!, unit: m[2]! } : { amount: label, unit: "" };
 }
 
 function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; config: GameConfig; theme: GameTheme; catalogReady: boolean }) {
@@ -399,9 +412,6 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
   }
 
   const productLabel = product ? shortLabel(product.label, game.name) : null;
-  const available = game.products.filter((p) => p.available);
-  // Bigger packs get a bigger pile of the game's currency icon.
-  const tier = (p: ProductOffer) => 1 + Math.min(2, Math.floor((3 * available.indexOf(p)) / Math.max(1, available.length)));
 
   return (
     <form ref={rootRef} onSubmit={submit} noValidate className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-5">
@@ -442,15 +452,15 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
               </Field>
             ) : null}
           </div>
-          {game.nicknameCheck ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button type="button" variant="secondary" size="sm" onClick={checkNickname} loading={checking}>
-                {!checking ? <MagnifyingGlass size={16} aria-hidden /> : null}
-                Cek nama akun
-              </Button>
-              <NicknameLine result={nickname} />
-            </div>
-          ) : null}
+          <AccountChecks
+            idOk={!errors.userId && !!userId}
+            zoneOk={config.zone ? !errors.zoneId && !!zoneId : null}
+            checkable={game.nicknameCheck}
+            supported={!!config.nicknameProduct}
+            checking={checking}
+            onCheck={checkNickname}
+            result={nickname}
+          />
         </SoftCard>
 
         <SoftCard step={2} title="Pilih nominal" note={game.productCount > 0 ? `${game.productCount} pilihan` : undefined} theme={theme}>
@@ -459,49 +469,22 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
               {catalogReady ? `Nominal ${game.name} sedang kosong. Coba lagi nanti.` : "Harga belum diterima dari penyedia. Coba lagi beberapa menit lagi."}
             </p>
           ) : (
-            <ClickSpark className="text-[var(--game)]">
-              <div ref={tilesRef} role="radiogroup" aria-label={`Nominal ${game.name}`} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {game.products.map((p) => {
-                  const on = p.code === product?.code;
-                  const { amount, unit } = splitLabel(shortLabel(p.label, game.name));
-                  return (
-                    <button
-                      key={p.code}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      aria-label={`${amount} ${unit}, ${p.available ? idr(p.price) : "habis"}`}
-                      disabled={!p.available}
-                      data-tile
-                      onClick={() => {
-                        setSelected(p.code);
-                        setSubmitError(null);
-                      }}
-                      className={`group relative flex min-h-[7rem] flex-col rounded-[20px] p-3.5 text-left text-ink transition-[transform,background-color,box-shadow] duration-300 ease-[var(--ease-out)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 ${
-                        on
-                          ? "bg-[color-mix(in_oklab,var(--game)_13%,var(--surface))] shadow-[inset_0_0_0_2px_var(--game),0_14px_30px_-16px_var(--game)]"
-                          : "bg-surface-2/70 hover:-translate-y-0.5 hover:bg-surface hover:shadow-[0_14px_30px_-18px_rgb(0_0_0/0.35),inset_0_0_0_1px_var(--line)]"
-                      }`}
-                    >
-                      <Pile Icon={theme.Icon} count={p.available ? tier(p) : 1} />
-                      <span className="mt-auto pt-3">
-                        <span className="block text-[1.35rem] font-extrabold leading-none tracking-tight tabular">{amount}</span>
-                        {unit ? <span className="mt-1 block truncate text-xs font-medium text-ink-3">{unit}</span> : null}
-                      </span>
-                      <span className={`mt-2.5 inline-flex w-fit rounded-full px-2.5 py-1 text-[13px] font-bold tabular ${on ? "bg-[var(--game)] text-[var(--game-ink)]" : "bg-surface text-ink-2 group-hover:text-ink"}`}>
-                        {p.available ? idr(p.price) : "Habis"}
-                      </span>
-                      {on ? <CheckCircle size={22} weight="fill" className="absolute right-3 top-3 text-[var(--game)]" aria-hidden /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </ClickSpark>
+            <div ref={tilesRef} className="scroll-mt-28">
+              <Denominations
+                game={game}
+                theme={theme}
+                selected={product?.code ?? null}
+                onSelect={(code) => {
+                  setSelected(code);
+                  setSubmitError(null);
+                }}
+              />
+            </div>
           )}
         </SoftCard>
       </div>
 
-      <aside aria-label="Ringkasan pesanan" data-card className="hidden lg:sticky lg:top-24 lg:block">
+      <aside aria-label="Ringkasan pesanan" data-card className="hidden gap-4 lg:sticky lg:top-24 lg:grid">
         <div className="overflow-hidden rounded-[28px] bg-surface shadow-raised ring-1 ring-line">
           <div className="bg-[linear-gradient(160deg,color-mix(in_oklab,var(--game)_18%,var(--surface)),var(--surface)_70%)] px-6 pb-5 pt-6">
             <div className="flex items-center gap-2.5">
@@ -534,6 +517,7 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
             </p>
           </div>
         </div>
+        <SideExtras />
       </aside>
 
       {/* Phones: the total and the pay button stay in reach. */}
@@ -554,6 +538,129 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
         </div>
       </div>
     </form>
+  );
+}
+
+const COLLAPSED = 12;
+
+/**
+ * Denomination picker. Amount packs (e.g. 86 Diamonds) and named packs (passes,
+ * memberships) sit in separate tabs when a game has both. Long lists start
+ * collapsed at 12 tiles; the selected one is always visible.
+ */
+function Denominations({ game, theme, selected, onSelect }: { game: GameSummary; theme: GameTheme; selected: string | null; onSelect: (code: string) => void }) {
+  const parsed = useMemo(() => game.products.map((p) => { const o = parseOffer(p.label, game.name, game.currency); return { p, o, c: categoryOf(o) }; }), [game]);
+  // Each game gets only the tabs its own catalog fills (e.g. Diamonds, Pass & membership, Bundle).
+  const tabs = sortCategories(parsed.map((x) => x.c)).map((id) => ({ id, label: categoryLabel(id, game.currency), items: parsed.filter((x) => x.c === id) }));
+  const initialTab: string = tabs.find((t) => t.items.some((x) => x.p.code === selected))?.id ?? tabs[0]?.id ?? "amount";
+  const [tab, setTab] = useState(initialTab);
+  const current = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const items = current?.items ?? [];
+  const selectedIndex = items.findIndex((x) => x.p.code === selected);
+  const [open, setOpen] = useState(selectedIndex >= COLLAPSED);
+  const shown = open ? items : items.slice(0, COLLAPSED);
+  const grid = useRef<HTMLDivElement>(null);
+  const seen = useRef<{ tab: string; count: number } | null>(null);
+  const available = items.filter((x) => x.p.available);
+  // Bigger packs get a bigger pile of the game's currency icon.
+  const tier = (code: string) => 1 + Math.min(2, Math.floor((3 * available.findIndex((x) => x.p.code === code)) / Math.max(1, available.length)));
+
+  // New tiles (another tab, or "show all") settle in; tiles already on screen stay put.
+  useGSAP(
+    () => {
+      const prev = seen.current;
+      seen.current = { tab, count: shown.length };
+      if (!prev) return; // first render: the checkout entrance already animates the tiles
+      const from = prev.tab === tab ? prev.count : 0;
+      motionOK(() => {
+        gsap.from(gsap.utils.toArray<HTMLElement>("[data-tile]").slice(from), { y: 14, opacity: 0, scale: 0.97, duration: 0.55, ease: "expo.out", stagger: 0.02 });
+      });
+    },
+    { scope: grid, dependencies: [tab, open] },
+  );
+
+  return (
+    <div ref={grid}>
+      {tabs.length > 1 ? (
+        <div role="tablist" aria-label="Kategori" className="-mx-1 mb-4 flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={t.id === tab}
+              onClick={() => {
+                setTab(t.id);
+                setOpen(false);
+              }}
+              className={`press h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors ${t.id === tab ? "bg-surface text-ink shadow-[0_2px_8px_-3px_rgb(0_0_0/0.25)]" : "text-ink-3 hover:text-ink"}`}
+            >
+              {t.label} <span className="ml-1 text-xs font-medium text-ink-3">{t.items.length}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <ClickSpark className="text-[var(--game)]">
+        <div role="radiogroup" aria-label={`Nominal ${game.name}`} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+          {shown.map(({ p, o, c }) => {
+            const on = p.code === selected;
+            const name = o.kind === "amount" ? `${o.amount.toLocaleString("id-ID")} ${o.unit}${o.bonus ? `, bonus ${o.bonus}` : ""}` : o.title;
+            return (
+              <button
+                key={p.code}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={`${name}, ${p.available ? idr(p.price) : "habis"}`}
+                disabled={!p.available}
+                data-tile
+                onClick={() => onSelect(p.code)}
+                className={`group relative flex min-h-[7.25rem] flex-col rounded-[20px] p-3.5 text-left text-ink transition-[transform,background-color,box-shadow] duration-300 ease-[var(--ease-out)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 ${
+                  on
+                    ? "bg-[color-mix(in_oklab,var(--game)_13%,var(--surface))] shadow-[inset_0_0_0_2px_var(--game),0_14px_30px_-16px_var(--game)]"
+                    : "bg-surface-2/70 hover:-translate-y-0.5 hover:bg-surface hover:shadow-[0_14px_30px_-18px_rgb(0_0_0/0.35),inset_0_0_0_1px_var(--line)]"
+                }`}
+              >
+                {o.kind === "amount" ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <Pile Icon={theme.Icon} count={p.available ? tier(p.code) : 1} />
+                      {o.bonus ? <span className="whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--game)_16%,var(--surface))] px-2 py-0.5 text-[11px] font-bold tabular text-[var(--game)]">+{o.bonus.toLocaleString("id-ID")}</span> : null}
+                    </span>
+                    <span className="mt-auto pt-3">
+                      <span className="block text-[1.35rem] font-extrabold leading-none tracking-tight tabular">{o.amount.toLocaleString("id-ID")}</span>
+                      <span className="mt-1 block truncate text-xs font-medium text-ink-3">{o.unit}</span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="grid size-7 place-items-center rounded-full bg-surface text-[var(--game)] shadow-[0_2px_6px_-2px_rgb(0_0_0/0.2)]" aria-hidden>
+                      {c === "bundle" ? <Package size={15} weight="fill" /> : c === "levelup" ? <TrendUp size={15} weight="bold" /> : <Crown size={15} weight="fill" />}
+                    </span>
+                    <span className="mt-auto line-clamp-2 pt-3 text-sm font-bold leading-snug">{o.title}</span>
+                  </>
+                )}
+                <span className={`mt-2.5 inline-flex w-fit rounded-full px-2.5 py-1 text-[13px] font-bold tabular ${on ? "bg-[var(--game)] text-[var(--game-ink)]" : "bg-surface text-ink-2 group-hover:text-ink"}`}>
+                  {p.available ? idr(p.price) : "Habis"}
+                </span>
+                {on ? <CheckCircle size={22} weight="fill" className="absolute right-3 top-3 text-[var(--game)]" aria-hidden /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </ClickSpark>
+      {items.length > COLLAPSED ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="press mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-surface-2 text-sm font-semibold text-ink-2 hover:text-ink"
+          aria-expanded={open}
+        >
+          {open ? "Tampilkan lebih sedikit" : `Tampilkan semua ${items.length} nominal`}
+          <CaretDown size={14} weight="bold" className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`} aria-hidden />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -650,6 +757,41 @@ function SummaryRow({ k, v }: { k: string; v: string | null }) {
   );
 }
 
+/**
+ * Everything the page can check about the account before paying: the ID format
+ * (instantly, in the browser) and, where the provider offers it, the account
+ * name. A check code the provider has switched off is shown as unavailable
+ * rather than hidden, and comes back on by itself when the catalog re-enables it.
+ */
+function AccountChecks(props: { idOk: boolean; zoneOk: boolean | null; checkable: boolean; supported: boolean; checking: boolean; onCheck: () => void; result: NicknameResult | null }) {
+  const formatOk = props.idOk && props.zoneOk !== false;
+  return (
+    <div className="mt-4 grid gap-2.5 rounded-[20px] bg-surface-2/70 p-3.5">
+      <CheckRow ok={formatOk} label={formatOk ? "Format ID sesuai" : "Format ID dicek otomatis saat kamu mengetik"} />
+      {props.supported || props.checkable ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Button type="button" variant="secondary" size="sm" onClick={props.onCheck} loading={props.checking} disabled={!props.checkable} className="rounded-full">
+            {!props.checking ? <MagnifyingGlass size={16} aria-hidden /> : null}
+            Cek nama akun
+          </Button>
+          {props.checkable ? <NicknameLine result={props.result} /> : <span className="text-xs text-ink-3">Sedang dimatikan penyedia. Aktif lagi otomatis begitu tersedia.</span>}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-3">Penyedia belum menyediakan cek nama untuk game ini. Pastikan ID sama persis dengan yang di profil game.</p>
+      )}
+    </div>
+  );
+}
+
+function CheckRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <p className={`flex items-center gap-2 text-sm ${ok ? "font-semibold text-success" : "text-ink-3"}`}>
+      {ok ? <CheckCircle size={18} weight="fill" className="shrink-0" aria-hidden /> : <Circle size={18} className="shrink-0" aria-hidden />}
+      {label}
+    </p>
+  );
+}
+
 function NicknameLine({ result }: { result: NicknameResult | null }) {
   if (!result) return null;
   if (result.status === "found") {
@@ -675,6 +817,127 @@ function NicknameLine({ result }: { result: NicknameResult | null }) {
   );
 }
 
+/** Under the pay card: this device's recent orders and where to get help. */
+function SideExtras() {
+  const [orders] = useState(() => savedOrders().slice(0, 3));
+  return (
+    <>
+      {orders.length > 0 ? (
+        <div className="rounded-[24px] bg-surface p-5 shadow-raised ring-1 ring-line">
+          <h3 className="flex items-center gap-2 text-sm font-bold">
+            <Receipt size={16} weight="fill" className="text-[var(--game)]" aria-hidden />
+            Pesanan terakhirmu
+          </h3>
+          <ul className="mt-3 grid gap-1.5">
+            {orders.map((o) => (
+              <li key={o.ref}>
+                <Link to={orderPath(o.ref, o.token)} className="press flex items-center justify-between gap-3 rounded-2xl bg-surface-2/70 px-3 py-2.5 hover:bg-surface-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold">{o.product}</span>
+                    <span className="block truncate text-xs text-ink-3">{o.game}</span>
+                  </span>
+                  <ArrowRight size={14} weight="bold" className="shrink-0 text-ink-3" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="rounded-[24px] bg-[linear-gradient(150deg,color-mix(in_oklab,var(--game)_14%,var(--surface)),var(--surface))] p-5 ring-1 ring-line">
+        <h3 className="flex items-center gap-2 text-sm font-bold">
+          <Headset size={16} weight="fill" className="text-[var(--game)]" aria-hidden />
+          Sudah bayar tapi belum masuk?
+        </h3>
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-2">Buka halaman pesananmu untuk melihat statusnya. Kalau gagal, pesanan otomatis masuk antrean admin.</p>
+        <Link to="/cek" className="press mt-3 inline-flex h-9 items-center gap-1.5 rounded-full bg-surface px-4 text-[13px] font-semibold shadow-[0_2px_8px_-3px_rgb(0_0_0/0.2)]">
+          Cek pesanan
+          <ArrowRight size={13} weight="bold" aria-hidden />
+        </Link>
+      </div>
+    </>
+  );
+}
+
+/** Every game as a poster card, with live counts from the catalog. */
+function AllGames({ games, active }: { games: GameSummary[]; active: string | null }) {
+  const grid = useRef<HTMLUListElement>(null);
+  // Alternate columns drift against each other while the grid crosses the screen.
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.utils.toArray<HTMLElement>("[data-drift]").forEach((el, i) => {
+          const dir = i % 2 === 0 ? 1 : -1;
+          gsap.fromTo(el, { y: 26 * dir }, { y: -26 * dir, ease: "none", scrollTrigger: { trigger: grid.current, start: "top bottom", end: "bottom top", scrub: 0.8 } });
+        });
+      });
+    },
+    { scope: grid, dependencies: [games.length] },
+  );
+  const live = games.filter((g) => g.productCount > 0);
+  const offers = live.reduce((n, g) => n + g.productCount, 0);
+  return (
+    <section aria-labelledby="games-title" className="mt-16">
+      <AnimatedContent>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 id="games-title" className="text-2xl font-extrabold tracking-tight">
+              Semua game
+            </h2>
+            <p className="mt-1 text-ink-2">Pilih game lain, harga dan nominal langsung dari katalog penyedia.</p>
+          </div>
+          <dl className="flex gap-2">
+            <Stat k="Game aktif" v={String(live.length)} />
+            <Stat k="Nominal" v={offers.toLocaleString("id-ID")} />
+          </dl>
+        </div>
+      </AnimatedContent>
+      <ul ref={grid} className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        {games.map((g, i) => {
+          const on = g.slug === active;
+          const t = themeFor(g.slug);
+          return (
+            <li key={g.slug} data-drift>
+              <AnimatedContent delay={(i % 6) * 0.05} distance={28} className="h-full">
+                <Link
+                  to={`/game/${g.slug}`}
+                  aria-current={on ? "page" : undefined}
+                  className={`group block h-full rounded-[22px] bg-surface p-2 shadow-raised ring-1 transition-transform duration-500 ease-[var(--ease-out)] hover:-translate-y-1 ${on ? "ring-2 ring-[var(--game)]" : "ring-line"} ${g.productCount === 0 ? "opacity-60" : ""}`}
+                >
+                  <span className="block overflow-hidden rounded-[16px]">
+                    <span className="block transition-transform duration-700 ease-[var(--ease-out)] group-hover:scale-[1.05]">
+                      <Poster slug={g.slug} name={g.name} image={g.image} />
+                    </span>
+                  </span>
+                  <span className="block px-1.5 pb-1 pt-2">
+                    <span className="block truncate text-[13px] font-bold">{g.name}</span>
+                    <span className="mt-0.5 flex items-center justify-between gap-1 text-[11px] text-ink-3">
+                      <span className="truncate">{g.productCount > 0 ? `${g.productCount} nominal` : "Segera"}</span>
+                      {g.startingPrice !== null ? (
+                        <span className="shrink-0 font-semibold" style={{ color: t.color }}>
+                          {idr(g.startingPrice)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                </Link>
+              </AnimatedContent>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-2xl bg-surface px-4 py-2.5 shadow-raised ring-1 ring-line">
+      <dt className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{k}</dt>
+      <dd className="text-lg font-extrabold tabular">{v}</dd>
+    </div>
+  );
+}
+
 const STEPS: [typeof Lightning, string, string][] = [
   [Sparkle, "Pilih game dan nominal", "Isi ID akun. Untuk game yang mendukung, cek nama akun dulu supaya tidak salah kirim."],
   [QrCode, "Bayar dengan QRIS", "Scan dari m-banking atau e-wallet mana pun. Tidak perlu daftar akun."],
@@ -682,8 +945,17 @@ const STEPS: [typeof Lightning, string, string][] = [
 ];
 
 function HowItWorks() {
+  const root = useRef<HTMLElement>(null);
+  useGSAP(
+    () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo("[data-num]", { yPercent: 60 }, { yPercent: -60, ease: "none", scrollTrigger: { trigger: root.current, start: "top bottom", end: "bottom top", scrub: 0.6 } });
+      });
+    },
+    { scope: root },
+  );
   return (
-    <section aria-labelledby="how-title" className="mt-16">
+    <section ref={root} aria-labelledby="how-title" className="mt-16">
       <AnimatedContent>
         <h2 id="how-title" className="text-2xl font-extrabold tracking-tight">
           Cara top-up
@@ -699,7 +971,7 @@ function HowItWorks() {
                   <span className="grid size-11 place-items-center rounded-2xl bg-[color-mix(in_oklab,var(--game)_14%,var(--surface))] text-[var(--game)]">
                     <Icon size={22} weight="fill" aria-hidden />
                   </span>
-                  <span className="text-3xl font-extrabold tabular text-ink/10" aria-hidden>
+                  <span data-num className="text-4xl font-extrabold tabular text-ink/10" aria-hidden>
                     0{i + 1}
                   </span>
                 </div>

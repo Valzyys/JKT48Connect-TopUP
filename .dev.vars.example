@@ -4,3 +4,6 @@ MYPG_API_KEY=replace-me
 OKECONNECT_CATALOG_ID=replace-me
 # Bearer token for /api/admin/* and the /admin page. Use 32+ random characters.
 ADMIN_TOKEN=replace-me
+ADMIN_EMAIL=admin@example.com
+# Output of `npm run admin:hash` (the password itself is never stored)
+ADMIN_PASSWORD_HASH=

@@ -1,10 +1,11 @@
-import { ArrowsClockwise, X } from "@phosphor-icons/react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { ArrowsClockwise, LockKey, X } from "@phosphor-icons/react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button, Field, Input, Notice } from "../components/ui";
 import { AdminPricing } from "./AdminPricing";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, wibDateTime } from "../lib/format";
+import { gsap, motionOK, useGSAP } from "../lib/motion";
 
 interface AdminOrder {
   ref: string;
@@ -47,7 +48,6 @@ function readToken(): string {
 export function Admin() {
   const [token, setToken] = useState(readToken);
   const [section, setSection] = useState<"orders" | "pricing">("orders");
-  const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("attention");
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,25 +112,19 @@ export function Admin() {
   }
 
   if (!token) {
-    const login = (e: FormEvent) => {
-      e.preventDefault();
-      try {
-        sessionStorage.setItem("jc.admin", draft);
-      } catch {
-        // ignore
-      }
-      setToken(draft);
-    };
     return (
-      <div className="mx-auto max-w-sm px-4 py-16">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <form onSubmit={login} className="mt-6 grid gap-4">
-          <Field label="Admin token" htmlFor="admin-token" error={error ?? undefined}>
-            <Input id="admin-token" type="password" value={draft} onChange={(e) => setDraft(e.target.value)} autoComplete="current-password" />
-          </Field>
-          <Button type="submit">Masuk</Button>
-        </form>
-      </div>
+      <AdminLogin
+        notice={error}
+        onSession={(t) => {
+          try {
+            sessionStorage.setItem("jc.admin", t);
+          } catch {
+            // Storage blocked: the session lasts until this tab closes.
+          }
+          setError(null);
+          setToken(t);
+        }}
+      />
     );
   }
 
@@ -138,6 +132,20 @@ export function Admin() {
     <div className="mx-auto max-w-[1400px] px-4 py-6 text-sm sm:px-6">
       <div className="mb-6 flex flex-wrap items-center gap-4 border-b border-line">
         <h1 className="pb-3 text-lg font-semibold tracking-tight">Admin</h1>
+        <button
+          type="button"
+          className="order-last mb-2 ml-auto rounded-full px-3 py-1.5 text-ink-2 hover:bg-surface-2 hover:text-ink"
+          onClick={() => {
+            try {
+              sessionStorage.removeItem("jc.admin");
+            } catch {
+              // ignore
+            }
+            setToken("");
+          }}
+        >
+          Keluar
+        </button>
         <nav aria-label="Bagian admin" className="flex gap-1">
           {(
             [
@@ -335,5 +343,69 @@ function Json({ title, value }: { title: string; value: unknown }) {
       <h3 className="font-semibold">{title}</h3>
       <pre className="mt-2 max-h-72 overflow-auto rounded-control border border-line bg-surface p-3 font-mono text-xs leading-relaxed text-ink-2">{JSON.stringify(value, null, 2)}</pre>
     </section>
+  );
+}
+
+/** Email and password sign-in. The session it returns lasts 12 hours. */
+function AdminLogin({ notice, onSession }: { notice: string | null; onSession: (token: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(notice);
+  const card = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      motionOK(() => {
+        gsap.from(card.current, { y: 30, opacity: 0, scale: 0.97, duration: 0.9, ease: "expo.out" });
+      });
+    },
+    { scope: card },
+  );
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.adminLogin({ email, password });
+      onSession(res.token);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Gagal masuk. Coba lagi.");
+      if (card.current && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+        gsap.fromTo(card.current, { x: -8 }, { x: 0, duration: 0.5, ease: "elastic.out(1, 0.3)" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid min-h-[70dvh] place-items-center px-4 py-16">
+      <div ref={card} className="w-full max-w-sm overflow-hidden rounded-[32px] bg-surface shadow-raised ring-1 ring-line">
+        <div className="bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-7 pb-7 pt-8 text-[var(--game-ink)]">
+          <span className="grid size-12 place-items-center rounded-2xl bg-[color-mix(in_oklab,var(--game-ink)_16%,transparent)]">
+            <LockKey size={24} weight="fill" aria-hidden />
+          </span>
+          <h1 className="mt-4 text-2xl font-extrabold tracking-tight">Masuk admin</h1>
+          <p className="mt-1 text-sm opacity-85">Pesanan, rekonsiliasi, harga dan margin.</p>
+        </div>
+        <form onSubmit={submit} className="grid gap-4 px-7 py-7">
+          <Field label="Email" htmlFor="admin-email">
+            <Input id="admin-email" type="email" inputMode="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </Field>
+          <Field label="Password" htmlFor="admin-password">
+            <Input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </Field>
+          {error ? (
+            <p className="rounded-2xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <Button type="submit" size="lg" loading={busy} className="w-full rounded-full">
+            Masuk
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }
