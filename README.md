@@ -101,7 +101,7 @@ The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surface
   - It offers "Cek nama akun" wherever the provider has a check code. When the provider switches that code off, it is shown as unavailable, and it comes back on its own when the catalog re-enables it.
 - **One checkout page.** `/` and `/game/<slug>` show the same screen:
   - a floating glass header;
-  - a hero with an animated grainy gradient in the game's colours (React Bits Grainient, WebGL, paused off-screen);
+  - a hero with an animated grainy gradient in the game's colours. On desktops it is React Bits Grainient (WebGL, loaded after first paint, half resolution, 30 fps, paused off-screen); phones and touch screens get a CSS gradient instead;
   - poster cards to pick the game;
   - three steps: account, denomination tiles, and a pay card (a floating glass bar on phones);
   - "Cara top-up" and an FAQ.
@@ -112,14 +112,21 @@ The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surface
   - Hero: the title animates letter by letter (GSAP SplitText), and the poster floats and tilts toward the pointer.
   - Scroll parallax (ScrollTrigger, scrubbed):
     - the hero copy sinks while the gradient swells and the poster rises;
-    - the game grid's columns drift against each other;
+    - the game grid's columns drift against each other (768px and wider);
     - step numbers float;
     - the footer wordmark slides sideways.
   - Checkout and lower sections: cards have a pointer spotlight (SpotlightCard), tiles spark on click (ClickSpark), the pay button is magnetic (Magnet), the total counts up to a new price, and sections reveal on scroll (AnimatedContent).
+- **Performance.** Measured on a phone profile (390px, 4x CPU slowdown):
+  - Before: with the WebGL hero, the page managed 12 frames in 2 seconds while idle. Now it runs at 60 fps (16.7 ms frames at the 95th percentile).
+  - The page background is a fixed layer, not `background-attachment: fixed`, which repaints on every scroll step.
+  - The ClickSpark canvas only has pixels while sparks are on screen.
+  - The order, lookup and admin pages and the WebGL background load on demand.
+  - Phosphor icons ship only the weights the app uses (`vite.config.ts`).
+  - Layout fits from 320px wide without sideways scrolling.
 - **React Bits.** The components live in `src/client/components/bits/`. They are adapted from [React Bits](https://reactbits.dev) by David Haz (MIT + Commons Clause, which allows use inside this app). Each file notes what changed.
 - **Order page.** It shows the status, a three-step progress bar, the QRIS with a countdown, the SN when done, and the details. When the page sees the payment confirmed or the top-up finish live, the status icon springs in and a toast appears.
 - **Errors.** A render error shows a message and a reload button under the normal header instead of a blank page. The error boundary resets on every page change, and a stale JS chunk after a redeploy triggers one automatic reload.
-- **Posters.** By default each game's 3:4 poster (`components/Poster.tsx`) is drawn from its colour, monogram and currency icon. To use licensed key art, put the file in `public/posters/` and set `image` in `src/shared/games.ts`.
+- **Posters.** Each game's 3:4 poster (`components/Poster.tsx`) shows its app icon from `public/games/<slug>.webp` (512px WebP), fading into the game's colour. Mobile Legends, Free Fire, both PUBG Mobile entries, Honor of Kings, Call of Duty Mobile, Delta Force and Blood Strike have one. Games without an icon (`image: null` in `src/shared/games.ts`) get a poster drawn from their colour, monogram and currency icon, and so does any icon that fails to load. To add one, put the file in `public/games/` and set `image`.
 
 ## Pricing
 

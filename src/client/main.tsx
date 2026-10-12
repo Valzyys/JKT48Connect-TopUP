@@ -6,13 +6,16 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
 import { useSmoothScroll } from "./lib/smoothScroll";
 import { useTheme } from "./lib/theme";
-import { Lookup } from "./pages/Lookup";
-import { Order } from "./pages/Order";
 import { Shop } from "./pages/Shop";
 import "./styles.css";
 
-// Operators only: keep the console out of the storefront bundle.
+// Only the shop is in the first download; other pages load when visited.
 const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
+const Order = lazy(() => import("./pages/Order").then((m) => ({ default: m.Order })));
+const Lookup = lazy(() => import("./pages/Lookup").then((m) => ({ default: m.Lookup })));
+
+/** Holds the page's height while its code loads, so the footer does not jump up. */
+const pageFallback = <div className="min-h-[70dvh]" />;
 
 function NotFound() {
   return (
@@ -37,16 +40,9 @@ function Pages() {
       <Routes>
         <Route path="/" element={<Shop />} />
         <Route path="/game/:slug" element={<Shop />} />
-        <Route path="/pesanan/:ref" element={<Order />} />
-        <Route path="/cek" element={<Lookup />} />
-        <Route
-          path="/admin"
-          element={
-            <Suspense fallback={null}>
-              <Admin />
-            </Suspense>
-          }
-        />
+        <Route path="/pesanan/:ref" element={<Suspense fallback={pageFallback}><Order /></Suspense>} />
+        <Route path="/cek" element={<Suspense fallback={pageFallback}><Lookup /></Suspense>} />
+        <Route path="/admin" element={<Suspense fallback={pageFallback}><Admin /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </ErrorBoundary>

@@ -1,12 +1,11 @@
 import { ArrowRight, CaretDown, Circle, Package, TrendUp, CheckCircle, Crown, Headset, Lightning, MagnifyingGlass, QrCode, Receipt, ShieldCheck, Sparkle, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { ActivityItem, GameSummary, GamesResponse, NicknameResult, ProductOffer } from "../../shared/api";
 import { type GameConfig, findGame } from "../../shared/games";
 import { AnimatedContent } from "../components/bits/AnimatedContent";
 import { ClickSpark } from "../components/bits/ClickSpark";
-import Grainient from "../components/bits/Grainient";
 import { Magnet } from "../components/bits/Magnet";
 import { SplitText } from "../components/bits/SplitText";
 import SpotlightCard from "../components/bits/SpotlightCard";
@@ -20,6 +19,12 @@ import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { scrollToElement } from "../lib/smoothScroll";
 import { newClientToken, orderPath, saveOrder, savedOrders } from "../lib/storage";
 import { useTheme } from "../lib/theme";
+
+// The WebGL background (and its ogl renderer) loads after first paint, and only
+// on desktops: on phones and touch screens the hero keeps its CSS gradient,
+// which costs nothing to scroll. The CSS gradient also shows until WebGL starts.
+const Grainient = lazy(() => import("../components/bits/Grainient"));
+const richBackground = typeof window !== "undefined" && window.matchMedia("(min-width: 768px) and (pointer: fine)").matches;
 
 /**
  * The whole storefront is one checkout: pick a game, enter the account, pick a
@@ -175,22 +180,30 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
 
   return (
     <section ref={root} className="relative -mt-16 overflow-hidden rounded-b-[40px] text-[var(--game-ink)] sm:rounded-b-[56px]">
-      {/* CSS gradient underneath: shows while WebGL starts, or if it is unavailable. */}
-      <div className="absolute inset-0 bg-[linear-gradient(140deg,var(--game),var(--game-deep))]" aria-hidden />
+      {/* CSS gradient underneath: the whole background on phones, and on desktops
+          while WebGL starts or when it is unavailable. */}
+      <div
+        className="absolute inset-0 bg-[radial-gradient(60%_45%_at_18%_12%,color-mix(in_oklab,var(--game)_55%,white)_0%,transparent_70%),radial-gradient(70%_60%_at_90%_80%,var(--game-deep)_0%,transparent_75%),linear-gradient(140deg,var(--game),var(--game-deep))]"
+        aria-hidden
+      />
       <div data-parallax-bg className="absolute inset-0" aria-hidden>
-        <Grainient
-          color1={theme.color}
-          color2={mixHex(theme.color, "#ffffff", 0.5)}
-          color3={theme.deep}
-          timeSpeed={0.12}
-          warpStrength={0.9}
-          warpAmplitude={40}
-          blendSoftness={0.25}
-          contrast={1.15}
-          saturation={0.95}
-          grainAmount={0.07}
-          zoom={0.85}
-        />
+        {richBackground ? (
+          <Suspense fallback={null}>
+            <Grainient
+              color1={theme.color}
+              color2={mixHex(theme.color, "#ffffff", 0.5)}
+              color3={theme.deep}
+              timeSpeed={0.12}
+              warpStrength={0.9}
+              warpAmplitude={40}
+              blendSoftness={0.25}
+              contrast={1.15}
+              saturation={0.95}
+              grainAmount={0.07}
+              zoom={0.85}
+            />
+          </Suspense>
+        ) : null}
       </div>
       {lightInk ? <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_45%,rgb(0_0_0/0.12))]" aria-hidden /> : null}
       <div className="relative mx-auto grid max-w-5xl gap-8 px-4 pb-32 pt-28 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
@@ -414,8 +427,8 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
   const productLabel = product ? shortLabel(product.label, game.name) : null;
 
   return (
-    <form ref={rootRef} onSubmit={submit} noValidate className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-5">
-      <div className="grid gap-4 lg:gap-5">
+    <form ref={rootRef} onSubmit={submit} noValidate className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:gap-5">
         <SoftCard step={1} title="Masukkan data akun" theme={theme}>
           <div className={`grid gap-4 ${config.zone ? "grid-cols-[minmax(0,1fr)_7.5rem] sm:grid-cols-[minmax(0,1fr)_10rem]" : ""}`}>
             <Field label={config.userId.label} hint={config.userId.hint} error={userError} htmlFor={userFieldId}>
@@ -861,10 +874,11 @@ function SideExtras() {
 /** Every game as a poster card, with live counts from the catalog. */
 function AllGames({ games, active }: { games: GameSummary[]; active: string | null }) {
   const grid = useRef<HTMLUListElement>(null);
-  // Alternate columns drift against each other while the grid crosses the screen.
+  // Alternate columns drift against each other while the grid crosses the screen
+  // (wide screens only: on phones 16 scrubbed cards cost more than they add).
   useGSAP(
     () => {
-      gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.matchMedia().add("(prefers-reduced-motion: no-preference) and (min-width: 768px)", () => {
         gsap.utils.toArray<HTMLElement>("[data-drift]").forEach((el, i) => {
           const dir = i % 2 === 0 ? 1 : -1;
           gsap.fromTo(el, { y: 26 * dir }, { y: -26 * dir, ease: "none", scrollTrigger: { trigger: grid.current, start: "top bottom", end: "bottom top", scrub: 0.8 } });
@@ -1028,7 +1042,7 @@ function Faq() {
 
 function CheckoutSkeleton() {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]" aria-busy aria-label="Memuat">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]" aria-busy aria-label="Memuat">
       <div className="grid gap-4">
         <Skeleton className="h-48 rounded-[28px]" />
         <Skeleton className="h-80 rounded-[28px]" />

@@ -103,15 +103,22 @@ html {
 }
 
 /* The page is never a flat sheet: a soft glow in the current game's colour and
-   a faint dot grid sit behind every section. */
+   a faint dot grid sit behind every section. It is a fixed layer of its own
+   rather than `background-attachment: fixed`, which repaints the whole page on
+   every scroll step on phones. */
 body {
   min-height: 100dvh;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(56rem 36rem at 100% 34rem, color-mix(in oklab, var(--game) 10%, transparent), transparent 70%),
     radial-gradient(48rem 40rem at 0% 75%, color-mix(in oklab, var(--game) 8%, transparent), transparent 70%),
-    radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
-    var(--bg);
-  background-attachment: fixed;
+    radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px;
 }
 
 h1,
