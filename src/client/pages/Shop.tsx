@@ -67,7 +67,7 @@ export function Shop() {
   return (
     <>
       <Hero theme={theme} game={current ?? null} games={games} latest={latest} loading={!data && !error} />
-      <div className="relative mx-auto max-w-5xl px-4 pb-32 lg:pb-10">
+      <div className="relative mx-auto max-w-7xl px-4 pb-32 sm:px-6 lg:pb-10">
         <div className="relative z-10 -mt-20 sm:-mt-24">
           {error ? (
             <SoftCard>
@@ -206,7 +206,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
         ) : null}
       </div>
       {lightInk ? <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_45%,rgb(0_0_0/0.12))]" aria-hidden /> : null}
-      <div className="relative mx-auto grid max-w-5xl gap-8 px-4 pb-32 pt-28 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
+      <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-32 pt-28 sm:px-6 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div data-parallax-copy className="min-w-0">
           <GamePicker games={games} active={game?.slug ?? null} />
           <div className="mt-8 min-h-[11rem]">
@@ -262,7 +262,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
         {game ? (
           <div data-parallax-card className="relative hidden md:block">
           <div data-float>
-            <div ref={card} className="relative mx-auto w-[16rem] rotate-[4deg]" style={{ transformStyle: "preserve-3d" }}>
+            <div ref={card} className="relative mx-auto w-[16rem] rotate-[4deg] lg:w-[19rem]" style={{ transformStyle: "preserve-3d" }}>
               <div className="absolute -inset-6 rounded-[40px] bg-[var(--game-ink)] opacity-20 blur-3xl" aria-hidden />
               <Poster slug={game.slug} name={game.name} image={game.image} className="rounded-[28px] shadow-[0_40px_70px_-24px_rgb(0_0_0/0.55)] ring-4 ring-white/25" />
             </div>
@@ -614,7 +614,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
         </div>
       ) : null}
       <ClickSpark className="text-[var(--game)]">
-        <div role="radiogroup" aria-label={`Nominal ${game.name}`} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+        <div role="radiogroup" aria-label={`Nominal ${game.name}`} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
           {shown.map(({ p, o, c }) => {
             const on = p.code === selected;
             const name = o.kind === "amount" ? `${o.amount.toLocaleString("id-ID")} ${o.unit}${o.bonus ? `, bonus ${o.bonus}` : ""}` : o.title;
@@ -905,7 +905,7 @@ function AllGames({ games, active }: { games: GameSummary[]; active: string | nu
           </dl>
         </div>
       </AnimatedContent>
-      <ul ref={grid} className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <ul ref={grid} className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
         {games.map((g, i) => {
           const on = g.slug === active;
           const t = themeFor(g.slug);

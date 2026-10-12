@@ -1,4 +1,4 @@
-import { ArrowSquareOut, Check, CheckCircle, Clock, Copy, Hourglass, LinkSimple, Warning, XCircle } from "@phosphor-icons/react";
+import { ArrowRight, ArrowSquareOut, Check, CheckCircle, Clock, Copy, Hourglass, LinkSimple, Receipt, Warning, XCircle } from "@phosphor-icons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { toast } from "sonner";
@@ -8,7 +8,7 @@ import { api, ApiRequestError } from "../lib/api";
 import { countdown, idr, shortLabel, wibDateTime, wibTime } from "../lib/format";
 import { BRAND, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, useGSAP } from "../lib/motion";
-import { readKeyFromHash, saveOrder, tokenFor } from "../lib/storage";
+import { orderPath, readKeyFromHash, saveOrder, savedOrders, tokenFor } from "../lib/storage";
 
 const STEPS = ["Bayar", "Diproses", "Selesai"] as const;
 
@@ -219,8 +219,59 @@ export function Order() {
   const pay = order.payment;
   const hint = hintFor(order.status);
 
+  const aside = (
+    <>
+      <Card>
+        <h2 className="text-[15px] font-semibold">Detail</h2>
+        <dl className="mt-3 grid gap-2 text-sm">
+          <Row k="Game" v={order.game.name} />
+          <Row k="Nominal" v={order.product.label} />
+          <Row k="ID akun" v={`${order.account.userId}${order.account.zoneId ? ` (${order.account.zoneId})` : ""}`} />
+          {order.account.nickname ? <Row k="Nama akun" v={order.account.nickname} /> : null}
+          <Row k="Harga" v={idr(order.price)} />
+          {pay?.adjustment ? <Row k="Biaya gateway" v={`+${idr(pay.adjustment)}`} /> : null}
+          {pay?.invoiceAmount ? <Row k="Total tagihan" v={idr(pay.invoiceAmount)} strong /> : null}
+        </dl>
+      </Card>
+
+      <div className="grid gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
+          <CopyLinkButton href={`${location.pathname}#k=${token}`} />
+          <span>Simpan link ini. Siapa pun yang memegangnya bisa melihat status pesanan.</span>
+        </div>
+        {order.canCancel ? (
+          confirmCancel ? (
+            <div className="rounded-[22px] bg-surface p-5 shadow-raised ring-1 ring-line" role="group" aria-label="Konfirmasi pembatalan">
+              <p className="font-medium">Batalkan pesanan ini?</p>
+              <p className="mt-1 text-sm text-ink-2">QRIS akan dibatalkan di gateway. Jangan bayar QRIS ini setelah dibatalkan.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="danger" onClick={cancel} loading={busy === "cancel"}>
+                  Batalkan pesanan
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirmCancel(false)}>
+                  Kembali
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => setConfirmCancel(true)}>
+              Batalkan pesanan
+            </Button>
+          )
+        ) : null}
+        {order.terminal ? (
+          <Link to={`/game/${order.game.slug}`} className="justify-self-start text-sm font-medium text-accent underline-offset-4 hover:underline">
+            Top-up {order.game.name} lagi
+          </Link>
+        ) : null}
+      </div>
+
+      <OtherOrders current={order.ref} />
+    </>
+  );
+
   return (
-    <Shell>
+    <Shell aside={aside}>
       <section className="overflow-hidden rounded-[28px] bg-surface shadow-raised ring-1 ring-line">
         <div className="flex items-center justify-between gap-3 bg-[linear-gradient(120deg,var(--game),var(--game-deep))] px-5 py-3.5 text-sm font-bold text-[var(--game-ink)] sm:px-6">
           <span>{order.game.name}</span>
@@ -269,60 +320,49 @@ export function Order() {
           </Button>
         </Card>
       ) : null}
-
-      <Card>
-        <h2 className="text-[15px] font-semibold">Detail</h2>
-        <dl className="mt-3 grid gap-2 text-sm">
-          <Row k="Game" v={order.game.name} />
-          <Row k="Nominal" v={order.product.label} />
-          <Row k="ID akun" v={`${order.account.userId}${order.account.zoneId ? ` (${order.account.zoneId})` : ""}`} />
-          {order.account.nickname ? <Row k="Nama akun" v={order.account.nickname} /> : null}
-          <Row k="Harga" v={idr(order.price)} />
-          {pay?.adjustment ? <Row k="Biaya gateway" v={`+${idr(pay.adjustment)}`} /> : null}
-          {pay?.invoiceAmount ? <Row k="Total tagihan" v={idr(pay.invoiceAmount)} strong /> : null}
-        </dl>
-      </Card>
-
-      <div className="grid gap-3 pt-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
-          <CopyLinkButton href={`${location.pathname}#k=${token}`} />
-          <span>Simpan link ini. Siapa pun yang memegangnya bisa melihat status pesanan.</span>
-        </div>
-        {order.canCancel ? (
-          confirmCancel ? (
-            <div className="rounded-[22px] bg-surface p-5 shadow-raised ring-1 ring-line" role="group" aria-label="Konfirmasi pembatalan">
-              <p className="font-medium">Batalkan pesanan ini?</p>
-              <p className="mt-1 text-sm text-ink-2">QRIS akan dibatalkan di gateway. Jangan bayar QRIS ini setelah dibatalkan.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="danger" onClick={cancel} loading={busy === "cancel"}>
-                  Batalkan pesanan
-                </Button>
-                <Button variant="ghost" onClick={() => setConfirmCancel(false)}>
-                  Kembali
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button variant="ghost" size="sm" className="justify-self-start" onClick={() => setConfirmCancel(true)}>
-              Batalkan pesanan
-            </Button>
-          )
-        ) : null}
-        {order.terminal ? (
-          <Link to={`/game/${order.game.slug}`} className="justify-self-start text-sm font-medium text-accent underline-offset-4 hover:underline">
-            Top-up {order.game.name} lagi
-          </Link>
-        ) : null}
-      </div>
     </Shell>
   );
 }
 
-function Shell({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
+/**
+ * One column on phones. On wide screens the status and QRIS take the main
+ * column and the details sit beside them, so the page uses the screen's width.
+ */
+function Shell({ children, aside, style }: { children: ReactNode; aside?: ReactNode; style?: React.CSSProperties }) {
   return (
-    <div className="mx-auto grid w-full max-w-lg gap-3 px-4 py-6 sm:py-10" style={style}>
-      {children}
+    <div className={`mx-auto grid w-full max-w-lg gap-3 px-4 py-6 sm:py-10 lg:max-w-7xl lg:gap-5 ${aside ? "lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start" : ""}`} style={style}>
+      <div className="grid min-w-0 gap-3">{children}</div>
+      {aside ? <aside className="grid min-w-0 gap-3 lg:sticky lg:top-24">{aside}</aside> : null}
     </div>
+  );
+}
+
+/** Other orders placed on this device, for guests who bought more than once. */
+function OtherOrders({ current }: { current: string }) {
+  const [orders] = useState(() => savedOrders().filter((o) => o.ref !== current).slice(0, 3));
+  if (orders.length === 0) return null;
+  return (
+    <section className="rounded-[26px] bg-surface p-5 shadow-raised ring-1 ring-line">
+      <h2 className="flex items-center gap-2 text-sm font-bold">
+        <Receipt size={16} weight="fill" className="text-[var(--game)]" aria-hidden />
+        Pesanan lain di perangkat ini
+      </h2>
+      <ul className="mt-3 grid gap-1.5">
+        {orders.map((o) => (
+          <li key={o.ref}>
+            <Link to={orderPath(o.ref, o.token)} className="press flex items-center justify-between gap-3 rounded-2xl bg-surface-2/70 px-3 py-2.5 hover:bg-surface-2">
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-semibold">{o.product}</span>
+                <span className="block truncate text-xs text-ink-3">
+                  {o.game} · {wibDateTime(o.createdAt)}
+                </span>
+              </span>
+              <ArrowRight size={14} weight="bold" className="shrink-0 text-ink-3" aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
