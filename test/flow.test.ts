@@ -417,6 +417,14 @@ describe("catalog outages", () => {
     expect(games.body.catalog).toMatchObject({ available: true, stale: true });
     expect(games.body.games.find((g: any) => g.slug === "mobile-legends").productCount).toBe(2);
   });
+
+  it("sorts products into games with the current game list, not the one that ran the last sync", async () => {
+    // As if an older deploy, which did not know Mobile Legends, ran the sync.
+    await h.db.prepare("UPDATE catalog_products SET product_type = 'other', game_slug = NULL WHERE kode IN ('ML5', 'ML86')").run();
+    const games = await h.request("/api/games");
+    expect(games.body.games.find((g: any) => g.slug === "mobile-legends").productCount).toBe(2);
+    await placeOrder();
+  });
 });
 
 describe("admin pricing", () => {

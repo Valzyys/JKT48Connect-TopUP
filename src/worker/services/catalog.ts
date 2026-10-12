@@ -4,7 +4,7 @@ import type { CatalogRow } from "../db";
 import type { Config } from "../env";
 import { ProviderCallError } from "../lib/http";
 import { iso } from "../lib/time";
-import { fetchCatalog } from "./okeconnect";
+import { classifyProduct, fetchCatalog } from "./okeconnect";
 import { loadPricing, priceFor, type PricingRules } from "./pricing";
 
 /**
@@ -97,8 +97,26 @@ export async function catalogNeedsRefresh(db: D1Database, config: Config, nowMs:
   return okAge > config.catalogTtlSeconds * 1000 && age > 60_000;
 }
 
+/**
+ * Which game a product belongs to is a pure function of its catalog fields and
+ * the current game list, so it is worked out again on every read. The stored
+ * `product_type` / `game_slug` columns only reflect the code that ran the last
+ * sync: without this, a deploy that adds games would keep showing them as
+ * unavailable until the next catalog sync.
+ */
+export function classified(row: CatalogRow): CatalogRow {
+  return { ...row, ...classifyProduct(row) };
+}
+
 export async function catalogProduct(db: D1Database, kode: string): Promise<CatalogRow | null> {
-  return db.prepare("SELECT * FROM catalog_products WHERE kode = ?").bind(kode).first<CatalogRow>();
+  const row = await db.prepare("SELECT * FROM catalog_products WHERE kode = ?").bind(kode).first<CatalogRow>();
+  return row ? classified(row) : null;
+}
+
+/** Every product in the latest catalog, classified with the current game list. */
+export async function presentProducts(db: D1Database): Promise<CatalogRow[]> {
+  const { results } = await db.prepare("SELECT * FROM catalog_products WHERE present = 1 ORDER BY harga ASC").all<CatalogRow>();
+  return results.map(classified);
 }
 
 export async function nicknameProductFor(db: D1Database, game: GameConfig): Promise<CatalogRow | null> {
@@ -115,13 +133,9 @@ export function toOffer(row: CatalogRow, rules: PricingRules): ProductOffer | nu
 /** Every storefront game with its sellable denominations, priced with the current rules. */
 export async function gameSummaries(db: D1Database, config: Config, nowMs: number): Promise<GameSummary[]> {
   const rules = await loadPricing(db, config);
-  const { results: rows } = await db
-    .prepare("SELECT * FROM catalog_products WHERE product_type = 'topup' AND present = 1 AND game_slug IS NOT NULL ORDER BY harga ASC")
-    .all<CatalogRow>();
-  const nick = await db
-    .prepare("SELECT kode FROM catalog_products WHERE product_type = 'nickname_check' AND present = 1 AND is_available = 1")
-    .all<{ kode: string }>();
-  const nickCodes = new Set(nick.results.map((r) => r.kode));
+  const present = await presentProducts(db);
+  const rows = present.filter((r) => r.product_type === "topup" && r.game_slug !== null);
+  const nickCodes = new Set(present.filter((r) => r.product_type === "nickname_check" && r.is_available === 1).map((r) => r.kode));
   const popular = await db
     .prepare("SELECT game_slug, COUNT(*) AS n FROM orders WHERE fulfillment_status = 'SUCCESS' AND created_at > ? GROUP BY game_slug")
     .bind(new Date(nowMs - 30 * 24 * 3600 * 1000).toISOString())

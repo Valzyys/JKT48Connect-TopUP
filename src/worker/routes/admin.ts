@@ -4,7 +4,7 @@ import { type CatalogRow, type FulfillmentRow, getFulfillment, getOrderById, get
 import { SESSION_TTL_MS, signSession, verifyPassword, verifySession } from "../lib/adminAuth";
 import { safeEqual, sha256Hex } from "../lib/ids";
 import { iso } from "../lib/time";
-import { syncCatalog } from "../services/catalog";
+import { catalogProduct, classified, syncCatalog } from "../services/catalog";
 import { checkFulfillment, retryFailedFulfillment, startFulfillment } from "../services/fulfillment";
 import { checkPayment } from "../services/orders";
 import { loadMargin, loadPricing, priceFor, ROUND_TO_OPTIONS, sellingPrice, validateMargin } from "../services/pricing";
@@ -158,7 +158,9 @@ export const adminRoutes = new Hono<Vars>()
   .get("/catalog", async (c) => {
     const ctx = c.get("ctx");
     const rules = await loadPricing(ctx.db, ctx.config);
-    const { results } = await ctx.db.prepare("SELECT * FROM catalog_products ORDER BY product_type, game_slug, harga").all<CatalogRow>();
+    const results = (await ctx.db.prepare("SELECT * FROM catalog_products").all<CatalogRow>()).results
+      .map(classified)
+      .sort((a, b) => a.product_type.localeCompare(b.product_type) || (a.game_slug ?? "").localeCompare(b.game_slug ?? "") || (a.harga ?? 0) - (b.harga ?? 0));
     const syncs = await ctx.db.prepare("SELECT * FROM catalog_syncs ORDER BY id DESC LIMIT 10").all();
     return c.json({
       products: results.map((r) => {
@@ -207,7 +209,7 @@ export const adminRoutes = new Hono<Vars>()
     const ctx = c.get("ctx");
     const kode = c.req.param("kode");
     const body = (await c.req.json().catch(() => ({}))) as { sellPrice?: unknown };
-    const product = await ctx.db.prepare("SELECT * FROM catalog_products WHERE kode = ?").bind(kode).first<CatalogRow>();
+    const product = await catalogProduct(ctx.db, kode);
     if (!product || product.product_type !== "topup" || product.harga === null) throw new AppError(404, "product_not_found", "Produk top-up tidak ditemukan.");
     const price = Number(body.sellPrice);
     if (!Number.isInteger(price) || price <= 0 || price > 100_000_000) {
