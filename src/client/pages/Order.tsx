@@ -221,12 +221,12 @@ export function Order() {
 
   return (
     <Shell>
-      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-raised">
-        <div className="flex items-center justify-between gap-3 bg-[var(--game)] px-4 py-2.5 text-sm font-semibold text-[var(--game-ink)] sm:px-5">
+      <section className="overflow-hidden rounded-[28px] bg-surface shadow-raised ring-1 ring-line">
+        <div className="flex items-center justify-between gap-3 bg-[linear-gradient(120deg,var(--game),var(--game-deep))] px-5 py-3.5 text-sm font-bold text-[var(--game-ink)] sm:px-6">
           <span>{order.game.name}</span>
           <span className="truncate font-normal opacity-80">{shortLabel(order.product.label, order.game.name)}</span>
         </div>
-        <div className="p-4 sm:p-5">
+        <div className="p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
           <span className="flex items-center gap-2 text-ink-3">
             Pesanan <CopyText value={order.ref} label="Nomor pesanan disalin" />
@@ -290,7 +290,7 @@ export function Order() {
         </div>
         {order.canCancel ? (
           confirmCancel ? (
-            <div className="rounded-card border border-line bg-surface p-4" role="group" aria-label="Konfirmasi pembatalan">
+            <div className="rounded-[22px] bg-surface p-5 shadow-raised ring-1 ring-line" role="group" aria-label="Konfirmasi pembatalan">
               <p className="font-medium">Batalkan pesanan ini?</p>
               <p className="mt-1 text-sm text-ink-2">QRIS akan dibatalkan di gateway. Jangan bayar QRIS ini setelah dibatalkan.</p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -327,7 +327,7 @@ function Shell({ children, style }: { children: ReactNode; style?: React.CSSProp
 }
 
 function Card({ children }: { children: ReactNode }) {
-  return <section className="rounded-card border border-line bg-surface p-4 sm:p-5">{children}</section>;
+  return <section className="rounded-[26px] bg-surface p-5 shadow-raised ring-1 ring-line sm:p-6">{children}</section>;
 }
 
 function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
@@ -382,7 +382,7 @@ function Steps({ status, animate }: { status: CustomerStatus; animate: boolean }
         const current = i === at && at < 3;
         return (
           <li key={label} className="grid gap-1.5" aria-current={current ? "step" : undefined}>
-            <span className="h-1 overflow-hidden rounded-full bg-surface-3">
+            <span className="h-2 overflow-hidden rounded-full bg-surface-2">
               {/* Inline transform: GSAP owns this element's transform. */}
               <span data-fill style={{ transform: "scaleX(0)", transformOrigin: "left center" }} className={`block h-full ${current && stopped ? "bg-danger" : done && i === 2 ? "bg-success" : "bg-[var(--game,var(--ink))]"}`} />
             </span>
@@ -420,7 +420,7 @@ function PaymentCard({ order }: { order: OrderView }) {
       <p className="text-3xl font-semibold tracking-tight tabular">{idr(amount)}</p>
       {pay.adjustment ? <p className="mt-1 text-sm text-ink-3">Termasuk biaya gateway {idr(pay.adjustment)}.</p> : null}
       {pay.qrImage ? (
-        <div className="mt-4 grid place-items-center rounded-control border border-line bg-white p-4">
+        <div className="mt-4 grid place-items-center rounded-[22px] bg-white p-5 shadow-[inset_0_0_0_1px_rgb(0_0_0/0.06)]">
           <img src={pay.qrImage} alt={`Kode QRIS untuk membayar ${idr(amount)}`} width={240} height={240} className="size-[240px] object-contain" referrerPolicy="no-referrer" />
         </div>
       ) : null}

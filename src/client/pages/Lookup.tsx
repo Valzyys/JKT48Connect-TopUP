@@ -44,7 +44,7 @@ export function Lookup() {
           Cek pesanan
         </h1>
         <p className="mt-2 max-w-[44ch] text-ink-2">Masukkan nomor pesanan dan ID game yang dipakai saat membeli.</p>
-        <form onSubmit={submit} noValidate className="mt-6 grid gap-4 rounded-card border border-line bg-surface p-4 sm:p-5">
+        <form onSubmit={submit} noValidate className="mt-6 grid gap-4 rounded-[28px] bg-surface p-5 shadow-raised ring-1 ring-line sm:p-6">
           <Field label="Nomor pesanan" hint="Contoh: JC-7K3FQ-W2P7Q9" htmlFor={refId}>
             <Input id={refId} value={ref} onChange={(e) => setRef(e.target.value)} autoCapitalize="characters" autoComplete="off" spellCheck={false} mono maxLength={20} aria-describedby={`${refId}-hint`} />
           </Field>
@@ -63,7 +63,7 @@ export function Lookup() {
         </form>
 
         {result ? (
-          <div className="rise mt-5 rounded-card border border-line bg-surface p-5" role="status">
+          <div className="rise mt-5 rounded-[26px] bg-surface p-5 shadow-raised ring-1 ring-line" role="status">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="font-mono font-semibold tabular">{result.ref}</p>
               <p className="text-sm text-ink-3">{wibDateTime(result.createdAt)}</p>
@@ -83,7 +83,7 @@ export function Lookup() {
           Di perangkat ini
         </h2>
         {orders.length === 0 ? (
-          <div className="mt-4 grid justify-items-start gap-3 rounded-card border border-dashed border-line p-6">
+          <div className="mt-4 grid justify-items-start gap-3 rounded-[26px] border-2 border-dashed border-line p-6">
             <Receipt size={28} className="text-ink-3" aria-hidden />
             <p className="text-ink-2">Pesanan yang kamu buat dari browser ini akan muncul di sini.</p>
             <Link to="/" className="press inline-flex items-center gap-1.5 rounded-button py-1 font-medium text-accent">
@@ -95,7 +95,7 @@ export function Lookup() {
           <ul className="mt-4 grid gap-2">
             {orders.map((o) => (
               <li key={o.ref}>
-                <Link to={orderPath(o.ref, o.token)} className="press flex items-center justify-between gap-4 rounded-card border border-line bg-surface px-4 py-3 hover:border-line-strong hover:bg-surface-2">
+                <Link to={orderPath(o.ref, o.token)} className="press flex items-center justify-between gap-4 rounded-[20px] bg-surface px-5 py-3.5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-line transition-shadow hover:shadow-raised">
                   <span className="min-w-0">
                     <span className="block font-mono text-sm font-medium tabular">{o.ref}</span>
                     <span className="block truncate text-sm text-ink-2">
