@@ -4,6 +4,9 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Builds the storefront into dist/client before every deploy, versions
+  // upload and dev run, so CI (Workers Builds) needs no separate build step.
+  "build": { "command": "npm run build:client" },
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
