@@ -2,6 +2,7 @@ import { ArrowsClockwise, X } from "@phosphor-icons/react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Field, Input, Notice } from "../components/ui";
+import { AdminPricing } from "./AdminPricing";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, wibDateTime } from "../lib/format";
 
@@ -45,6 +46,7 @@ function readToken(): string {
 /** Operator console for reconciliation. Dense by design: scanned, not browsed. */
 export function Admin() {
   const [token, setToken] = useState(readToken);
+  const [section, setSection] = useState<"orders" | "pricing">("orders");
   const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("attention");
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
@@ -134,8 +136,30 @@ export function Admin() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 text-sm sm:px-6">
+      <div className="mb-6 flex flex-wrap items-center gap-4 border-b border-line">
+        <h1 className="pb-3 text-lg font-semibold tracking-tight">Admin</h1>
+        <nav aria-label="Bagian admin" className="flex gap-1">
+          {(
+            [
+              ["orders", "Pesanan"],
+              ["pricing", "Harga & margin"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={section === id ? "page" : undefined}
+              onClick={() => setSection(id)}
+              className={`-mb-px border-b-2 px-3 pb-3 pt-1 font-medium ${section === id ? "border-accent text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
+      {section === "pricing" ? <AdminPricing token={token} /> : <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">Rekonsiliasi pesanan</h1>
+        <h2 className="text-base font-semibold tracking-tight">Rekonsiliasi pesanan</h2>
         <div className="flex flex-wrap items-center gap-2">
           <div role="tablist" aria-label="Filter" className="flex rounded-button border border-line bg-surface p-0.5">
             {FILTERS.map((f) => (
@@ -210,6 +234,7 @@ export function Admin() {
       </div>
 
       {detail ? <DetailPanel detail={detail} busy={busy} onClose={() => setDetail(null)} onAction={action} /> : null}
+      </>}
     </div>
   );
 }

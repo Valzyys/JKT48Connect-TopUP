@@ -35,7 +35,7 @@ Non-secret settings live in `wrangler.jsonc` under `vars`:
 | `TOPUP_H2H_BASE` | `https://h2h.jkt48connect.com` | H2H base URL (HTTPS enforced) |
 | `MYPG_BASE` | `https://yobasepay.net/api_my` | MYPG endpoint |
 | `OKECONNECT_CATALOG_URL`, `OKECONNECT_CATALOG_PRODUK` | documented URL, `digital` | Catalog endpoint |
-| `PRICE_MARKUP_PERCENT`, `PRICE_MARKUP_FLAT`, `PRICE_ROUND_TO` | `5`, `500`, `100` | Selling price = cost x (1 + %) + flat, rounded up |
+| `PRICE_MARKUP_PERCENT`, `PRICE_MARKUP_FLAT`, `PRICE_ROUND_TO` | `5`, `500`, `100` | Default margin until an admin sets one in `/admin` |
 | `MYPG_MAX_AMOUNT_DELTA` | `1000` | Largest accepted difference between the amount requested and the amount MYPG returns |
 | `MYPG_TIME_OFFSET` | `+07:00` | Zone assumed for MYPG `expired_at` / `paid_at` (not documented by MYPG) |
 | `MYPG_DEFAULT_TTL_MINUTES` | `30` | Invoice lifetime when `expired_at` is missing |
@@ -78,10 +78,18 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 
 ## Storefront design
 
-- The red hero, poster grid, and condensed Archivo display type are the brand surface. UI text stays in Geist.
-- Motion uses GSAP (`src/client/lib/motion.ts`): the hero entrance, poster and section reveals on scroll, the order progress bars, and a one-off confirmation when a payment is verified or a top-up completes (`components/Celebration.tsx`). Every animation is skipped under `prefers-reduced-motion`.
-- The "Live" strip and the "Paling laris" ranking use real data from `GET /api/activity` (completed top-ups, no account identifiers) and order counts. With fewer than three completed orders, the strip lists what is on sale instead.
-- **Game artwork:** no licensed key art ships with the repo. Put official images in `public/games/` and set `image` in `src/shared/games.ts` (e.g. `"/games/mobile-legends.webp"`, 3:4). Until then, posters are generated from each game's hue and genre glyph.
+- **Concept:** the storefront is a price list, like a konter pulsa board. Every game, denomination and price is on the home page, with dotted leaders between item and price. Clicking a price opens the game page with that denomination selected. There is no marketing hero and no generated artwork; everything shown is live catalog data.
+- **Order page:** the order page is a receipt. When payment is verified it gets a "LUNAS" rubber stamp, and when the top-up lands a "BERHASIL" stamp. If the page sees the change live, GSAP presses the stamp down (`components/Stamp.tsx`).
+- **Other motion:** price rows print in as a board scrolls into view, and the order progress bars fill. All motion is skipped under `prefers-reduced-motion`.
+- **Typography:** game names use Archivo condensed; UI text is Geist, and prices are Geist Mono.
+- **Game artwork:** none ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
+
+## Pricing
+
+Admins set prices from `/admin` → **Harga & margin**:
+- **Global margin:** selling price = cost × (1 + %) + flat, rounded up to 1, 50, 100, 500 or 1000. It is stored in D1. Until an admin saves one, the `PRICE_*` vars in `wrangler.jsonc` apply.
+- **Fixed price per product:** it can never be saved below the current provider cost. If the cost later rises above it, it is ignored and the global margin applies, so nothing is sold at a loss. The admin view flags such products.
+- **Scope of changes:** every change is written to an audit trail. New orders use the new price; existing orders keep the price they were created with.
 
 ## Admin
 

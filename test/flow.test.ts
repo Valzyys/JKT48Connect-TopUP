@@ -51,6 +51,18 @@ function providers() {
   return { state, routes };
 }
 
+/**
+ * Advances fake timers one second at a time until `isDone`. Between steps it
+ * yields to real I/O (crypto.subtle.digest is not faked), so a provider
+ * timeout armed after an async step is still reached.
+ */
+async function stepClock(isDone: () => boolean) {
+  for (let i = 0; i < 120 && !isDone(); i++) {
+    await vi.advanceTimersByTimeAsync(1_000);
+    await new Promise((r) => setImmediate(r));
+  }
+}
+
 let h: ReturnType<typeof makeHarness>;
 let fake: ReturnType<typeof providers>;
 let calls: ReturnType<typeof mockFetch>["calls"];
@@ -218,7 +230,7 @@ describe("payment verification and fulfillment", () => {
       await h.request(`/api/orders/${order.ref}`, { headers: auth });
       let done = false;
       const settled = h.settle().finally(() => (done = true));
-      for (let i = 0; i < 60 && !done; i++) await vi.advanceTimersByTimeAsync(1_000);
+      await stepClock(() => done);
       await settled;
     } finally {
       vi.useRealTimers();
@@ -291,7 +303,7 @@ describe("invoice creation", () => {
       let done = false;
       const pending = h.request("/api/orders", { body: orderBody }).finally(() => (done = true));
       // Step the clock until the request settles: the timeout is armed only once fetch starts.
-      for (let i = 0; i < 40 && !done; i++) await vi.advanceTimersByTimeAsync(1_000);
+      await stepClock(() => done);
       res = await pending;
       fake.routes[1] = original;
     } finally {

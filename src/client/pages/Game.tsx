@@ -1,9 +1,8 @@
-import { ArrowLeft, Check, CheckCircle, Coins, Diamond, Lightning, MagnifyingGlass, QrCode, ShieldCheck, WarningCircle } from "@phosphor-icons/react";
+import { CheckCircle, MagnifyingGlass, QrCode, WarningCircle } from "@phosphor-icons/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { GameDetailResponse, NicknameResult } from "../../shared/api";
-import { PosterArt } from "../components/GamePoster";
 import { EASE, gsap, motionOK, useGSAP } from "../lib/motion";
 import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
@@ -22,6 +21,7 @@ function validate(spec: { pattern: string; label: string } | null, value: string
 export function Game() {
   const { slug = "" } = useParams();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [data, setData] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -30,7 +30,8 @@ export function Game() {
   const [zoneId, setZoneId] = useState("");
   const [touched, setTouched] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<string | null>(null);
+  // Arriving from a price on the board preselects that denomination.
+  const [selected, setSelected] = useState<string | null>(() => params.get("item"));
   const [nickname, setNickname] = useState<NicknameResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -46,10 +47,8 @@ export function Game() {
       motionOK(() => {
         gsap
           .timeline({ defaults: { ease: EASE } })
-          .from("[data-game-banner]", { y: 20, opacity: 0, duration: 0.7 })
-          .from("[data-banner-title]", { yPercent: 40, opacity: 0, duration: 0.8 }, "-=0.45")
-          .from("[data-banner-meta] > *", { y: 10, opacity: 0, duration: 0.5, stagger: 0.05 }, "-=0.5")
-          .from("[data-denom]", { y: 16, opacity: 0, duration: 0.5, stagger: 0.03 }, "-=0.3");
+          .from("[data-banner-title]", { yPercent: 30, opacity: 0, duration: 0.7 })
+          .from("[data-denom]", { opacity: 0, y: 6, duration: 0.4, stagger: 0.02 }, "-=0.4");
       });
     },
     { scope: pageRef, dependencies: [data?.game.slug] },
@@ -152,36 +151,33 @@ export function Game() {
   if (!data || !game) return <GameSkeleton />;
 
   const userError = touched ? errors.userId : undefined;
-  const CurrencyIcon = /diamond/i.test(game.currency) ? Diamond : Coins;
   const zoneError = touched ? errors.zoneId : undefined;
 
   return (
     <div ref={pageRef} className="mx-auto max-w-6xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:pb-16">
-      <section data-game-banner className="relative isolate overflow-hidden rounded-[28px] text-white">
-        <PosterArt game={game} wordmark={false} />
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[oklch(0.14_0.03_275/0.85)] via-[oklch(0.14_0.03_275/0.45)] to-transparent" />
-        <div className="relative px-5 pb-6 pt-4 sm:px-8 sm:pb-9 sm:pt-6">
-          <Link to="/" className="press inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-sm text-white/90 backdrop-blur-md hover:bg-white/20">
-            <ArrowLeft size={16} aria-hidden />
-            Semua game
-          </Link>
-          <h1 data-banner-title className="display mt-10 text-[clamp(2.8rem,9vw,5.5rem)] sm:mt-14">{game.name}</h1>
-          <div data-banner-meta className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">{game.publisher}</span>
-            <span className="rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">{game.tagline}</span>
-            {game.nicknameCheck ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">
-                <ShieldCheck size={15} weight="fill" aria-hidden />
-                Cek nama akun
-              </span>
-            ) : null}
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-md">
-              <Lightning size={15} weight="fill" aria-hidden />
-              Proses otomatis
-            </span>
-          </div>
+      <nav aria-label="Lokasi" className="text-sm text-ink-3">
+        <Link to="/" className="hover:text-ink">
+          Daftar harga
+        </Link>
+        <span className="mx-2" aria-hidden>
+          /
+        </span>
+        <span className="text-ink-2">{game.name}</span>
+      </nav>
+      <header className="mt-4 grid gap-3 border-b border-ink pb-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="min-w-0 overflow-hidden">
+          <h1 data-banner-title className="display text-[clamp(2.6rem,8vw,4.75rem)]">{game.name}</h1>
+          <p className="mt-3 text-sm text-ink-2">
+            {game.publisher}, {game.tagline}. {game.productCount} nominal aktif.
+          </p>
         </div>
-      </section>
+        {game.startingPrice !== null ? (
+          <p className="text-sm text-ink-3 sm:text-right">
+            mulai
+            <span className="block font-mono text-2xl font-semibold tabular text-ink">{idr(game.startingPrice)}</span>
+          </p>
+        ) : null}
+      </header>
 
       {data.catalog.stale && data.catalog.available ? (
         <div className="mt-6">
@@ -191,9 +187,9 @@ export function Game() {
 
       <form onSubmit={submit} noValidate className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="grid gap-8">
-          <section aria-labelledby="account-title" className="rounded-card border border-line bg-surface p-5 shadow-ambient sm:p-6">
-            <h2 id="account-title" className="flex items-center gap-2.5 text-base font-semibold">
-              <span className="grid size-6 place-items-center rounded-full bg-surface-2 font-mono text-xs tabular text-ink-2">1</span>
+          <section aria-labelledby="account-title">
+            <h2 id="account-title" className="flex items-baseline gap-3 text-lg font-semibold tracking-tight">
+              <span className="font-mono text-sm tabular text-accent">01</span>
               Data akun
             </h2>
             <div className={`mt-5 grid gap-4 ${game.zone ? "sm:grid-cols-[minmax(0,1fr)_10rem]" : ""}`}>
@@ -247,9 +243,9 @@ export function Game() {
             )}
           </section>
 
-          <section id="denominations" aria-labelledby="nominal-title" className="scroll-mt-24 rounded-card border border-line bg-surface p-5 shadow-ambient sm:p-6">
-            <h2 id="nominal-title" className="flex items-center gap-2.5 text-base font-semibold">
-              <span className="grid size-6 place-items-center rounded-full bg-surface-2 font-mono text-xs tabular text-ink-2">2</span>
+          <section id="denominations" aria-labelledby="nominal-title" className="scroll-mt-24 border-t border-line pt-8">
+            <h2 id="nominal-title" className="flex items-baseline gap-3 text-lg font-semibold tracking-tight">
+              <span className="font-mono text-sm tabular text-accent">02</span>
               Pilih nominal
             </h2>
             {data.products.length === 0 ? (
@@ -259,7 +255,7 @@ export function Game() {
                 </Notice>
               </div>
             ) : (
-              <div role="radiogroup" aria-labelledby="nominal-title" className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              <div role="radiogroup" aria-labelledby="nominal-title" className="mt-4 grid gap-x-6 sm:grid-cols-2">
                 {data.products.map((p) => {
                   const active = p.code === selected;
                   return (
@@ -274,25 +270,17 @@ export function Game() {
                         setSelected(p.code);
                         setSubmitError(null);
                       }}
-                      className={`press relative grid min-h-[5.5rem] content-between gap-2 overflow-hidden rounded-2xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:p-3.5 ${
-                        active ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line bg-surface hover:border-line-strong hover:bg-surface-2"
+                      className={`press -mx-2 flex items-baseline gap-3 rounded-control px-2 py-3 text-left transition-colors duration-150 disabled:cursor-not-allowed disabled:text-ink-3 ${
+                        active ? "bg-ink text-bg" : "text-ink hover:bg-surface-2"
                       }`}
                     >
-                      <span className="flex items-start justify-between gap-2">
-                        <span className={`grid size-8 shrink-0 place-items-center rounded-xl ${active ? "bg-accent text-accent-ink" : "bg-surface-2 text-accent"}`}>
-                          <CurrencyIcon size={18} weight="fill" aria-hidden />
-                        </span>
-                        <span
-                          className={`grid size-5 place-items-center rounded-full border transition-colors duration-150 ${active ? "border-accent bg-accent text-accent-ink" : "border-line-strong"}`}
-                          aria-hidden
-                        >
-                          {active ? <Check size={12} weight="bold" /> : null}
-                        </span>
-                      </span>
-                      <span className="grid gap-0.5">
-                        <span className="text-sm font-semibold leading-snug text-ink">{shortLabel(p.label, game.name)}</span>
-                        <span className={`font-mono text-sm tabular ${active ? "text-accent" : "text-ink-2"}`}>{p.available ? idr(p.price) : "Habis"}</span>
-                      </span>
+                      <span
+                        aria-hidden
+                        className={`relative top-[0.15em] size-3.5 shrink-0 self-start rounded-full border-2 ${active ? "border-bg bg-accent" : "border-line-strong"}`}
+                      />
+                      <span className="min-w-0 text-[15px] font-medium">{shortLabel(p.label, game.name)}</span>
+                      <span className="leader" aria-hidden />
+                      <span className="shrink-0 font-mono text-[15px] tabular">{p.available ? idr(p.price) : "habis"}</span>
                     </button>
                   );
                 })}

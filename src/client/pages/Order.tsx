@@ -3,9 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { toast } from "sonner";
 import type { CustomerStatus, OrderView } from "../../shared/api";
-import { findGame } from "../../shared/games";
-import { Celebration } from "../components/Celebration";
-import { PosterArt } from "../components/GamePoster";
+import { Stamp, type StampKind } from "../components/Stamp";
 import { Button, Notice, Skeleton } from "../components/ui";
 import { EASE, gsap, motionOK, useGSAP } from "../lib/motion";
 import { api, ApiRequestError } from "../lib/api";
@@ -70,16 +68,21 @@ export function Order() {
   const startedAt = useRef(Date.now());
   const ticketRef = useRef<HTMLElement>(null);
   const prevStatus = useRef<CustomerStatus | null>(null);
-  const [celebrate, setCelebrate] = useState<"paid" | "success" | null>(null);
+  const [slam, setSlam] = useState(false);
 
-  // Play the confirmation moment only for transitions seen live on this page.
+  // The stamp slams only for transitions seen live on this page; on a reload it is simply there.
   useEffect(() => {
     if (!order) return;
     const prev = prevStatus.current;
     prevStatus.current = order.status;
     if (!prev || prev === order.status) return;
-    if (order.status === "SUCCESS") setCelebrate("success");
-    else if ((prev === "WAITING_PAYMENT" || prev === "CANCELLING") && ["PAID", "PROCESSING", "VERIFYING"].includes(order.status)) setCelebrate("paid");
+    const before = stampFor(prev);
+    const now = stampFor(order.status);
+    if (now && now !== before) {
+      setSlam(true);
+      if (now === "paid") toast.success("Pembayaran terkonfirmasi", { description: "Top-up sedang diproses." });
+      if (now === "success") toast.success("Top-up berhasil", { description: "Item sudah dikirim ke akunmu." });
+    }
   }, [order?.status]);
 
   // Ticket entrance on first load, and the SN reveal whenever it appears.
@@ -97,7 +100,7 @@ export function Order() {
     () => {
       if (order?.status !== "SUCCESS") return;
       motionOK(() => {
-        gsap.from("[data-sn] > *", { y: 12, opacity: 0, duration: 0.6, ease: EASE, stagger: 0.08, delay: celebrate ? 2.3 : 0.3 });
+        gsap.from("[data-sn] > *", { y: 12, opacity: 0, duration: 0.6, ease: EASE, stagger: 0.08, delay: slam ? 0.7 : 0.3 });
       });
     },
     { scope: ticketRef, dependencies: [order?.status] },
@@ -201,36 +204,29 @@ export function Order() {
   }
 
   const { cls, Icon } = tone(order.status);
-  const gameConfig = findGame(order.game.slug);
+  const stampKind = stampFor(order.status);
   const stage = stageOf(order.status);
   const pay = order.payment;
 
   return (
     <Shell>
-      <article ref={ticketRef} className="relative overflow-hidden rounded-ticket border border-line bg-surface shadow-raised">
-        {celebrate ? <Celebration kind={celebrate} onDone={() => setCelebrate(null)} /> : null}
-        {gameConfig ? (
-          <div data-ticket-part className="relative h-24 overflow-hidden text-white sm:h-28">
-            <PosterArt game={gameConfig} wordmark={false} />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[oklch(0.14_0.03_275/0.8)] to-transparent" />
-            <div className="relative flex h-full items-end justify-between gap-3 px-5 pb-4 sm:px-6">
-              <div className="min-w-0">
-                <p className="display truncate text-3xl sm:text-4xl">{order.game.name}</p>
-                <p className="truncate text-sm text-white/80">{order.product.label}</p>
-              </div>
-            </div>
-          </div>
-        ) : null}
+      <article ref={ticketRef} data-ticket className="relative overflow-hidden rounded-ticket border border-line bg-surface shadow-raised">
         <header data-ticket-part className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="display text-[2rem] sm:text-[2.4rem]">{order.game.name}</p>
+          <p className="mt-1 text-ink-2">{order.product.label}</p>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-4">
             <div>
               <p className="text-sm text-ink-3">Nomor pesanan</p>
               <CopyText value={order.ref} className="mt-0.5 text-lg font-semibold" label="Nomor pesanan disalin" />
             </div>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${cls}`}>
-              <Icon size={16} weight="bold" aria-hidden />
-              {statusLabel(order.status)}
-            </span>
+            {stampKind ? (
+              <Stamp kind={stampKind} date={stampDate(order, stampKind)} slam={slam} onLanded={() => setSlam(false)} />
+            ) : (
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${cls}`}>
+                <Icon size={16} weight="bold" aria-hidden />
+                {statusLabel(order.status)}
+              </span>
+            )}
           </div>
           <p className="mt-4 text-[15px] text-ink" aria-live="polite">
             {order.message}
@@ -307,6 +303,36 @@ export function Order() {
       </div>
     </Shell>
   );
+}
+
+function stampFor(status: CustomerStatus): StampKind | null {
+  switch (status) {
+    case "PAID":
+    case "PROCESSING":
+    case "VERIFYING":
+      return "paid";
+    case "SUCCESS":
+      return "success";
+    case "FAILED":
+      return "failed";
+    case "CANCELLED":
+      return "cancelled";
+    case "EXPIRED":
+      return "expired";
+    default:
+      return null;
+  }
+}
+
+function stampDate(order: OrderView, kind: StampKind): string | null {
+  if (kind === "success" && order.fulfillment?.completedAt) return dayStamp(order.fulfillment.completedAt);
+  // MYPG's paid_at is shown as received (date part only), never reinterpreted.
+  if (kind === "paid" && order.payment?.paidAtRaw) return order.payment.paidAtRaw.slice(0, 10).split("-").reverse().join(".");
+  return dayStamp(order.updatedAt);
+}
+
+function dayStamp(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(iso)).replace(/\//g, ".");
 }
 
 function statusLabel(s: CustomerStatus): string {

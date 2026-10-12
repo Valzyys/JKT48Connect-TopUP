@@ -1,3 +1,4 @@
+import { type Margin, ROUND_TO_OPTIONS, sellingPrice } from "../../shared/pricing";
 import type { Config } from "../env";
 
 /**
@@ -9,22 +10,10 @@ import type { Config } from "../env";
  * Global rules come from the `settings` table, falling back to the PRICE_* vars.
  */
 
-export interface Margin {
-  markupPercent: number;
-  markupFlat: number;
-  roundTo: number;
-}
+export { ROUND_TO_OPTIONS, sellingPrice, type Margin };
 
 export interface PricingRules extends Margin {
   overrides: Map<string, number>;
-}
-
-export const ROUND_TO_OPTIONS = [1, 50, 100, 500, 1000] as const;
-
-export function sellingPrice(providerCost: number, margin: Margin): number {
-  const raw = providerCost * (1 + margin.markupPercent / 100) + margin.markupFlat;
-  const rounded = Math.ceil(raw / margin.roundTo) * margin.roundTo;
-  return Math.max(rounded, providerCost);
 }
 
 export type PriceSource = "margin" | "override" | "override_below_cost";
