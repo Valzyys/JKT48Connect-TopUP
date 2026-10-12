@@ -6,7 +6,7 @@ import type { CustomerStatus, OrderView } from "../../shared/api";
 import { Button, Notice, Skeleton } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { countdown, idr, shortLabel, wibDateTime, wibTime } from "../lib/format";
-import { themeFor } from "../lib/gameTheme";
+import { BRAND, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, useGSAP } from "../lib/motion";
 import { readKeyFromHash, saveOrder, tokenFor } from "../lib/storage";
 
@@ -99,6 +99,7 @@ export function Order() {
   const prevStatus = useRef<CustomerStatus | null>(null);
   // Set when this page saw the order advance live, so the change is animated.
   const [advanced, setAdvanced] = useState(false);
+  useGameColour(order ? themeFor(order.game.slug) : BRAND);
 
   useEffect(() => {
     if (!order) return;
@@ -217,10 +218,9 @@ export function Order() {
 
   const pay = order.payment;
   const hint = hintFor(order.status);
-  const theme = themeFor(order.game.slug);
 
   return (
-    <Shell style={{ "--game": theme.color, "--game-ink": theme.ink } as React.CSSProperties}>
+    <Shell>
       <section className="overflow-hidden rounded-card border border-line bg-surface shadow-raised">
         <div className="flex items-center justify-between gap-3 bg-[var(--game)] px-4 py-2.5 text-sm font-semibold text-[var(--game-ink)] sm:px-5">
           <span>{order.game.name}</span>

@@ -87,7 +87,8 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 - **Order page.** It shows the status, a three-step progress bar (Bayar, Diproses, Selesai), the QRIS with a countdown, the SN once the top-up is done, and the order details. When the page sees the payment confirmed or the top-up finish live, GSAP springs the status icon in, fills the progress bar, and a toast appears. All motion is skipped under `prefers-reduced-motion`.
 - **Errors.** A render error shows a message and a reload button under the normal header instead of a blank page. The error boundary resets on every page change, and a stale JS chunk after a redeploy triggers one automatic reload.
 - **Type and colour.** The platform's own UI font (no web fonts) on a warm neutral base, with the game colour as the accent. Light and dark themes.
-- **Game artwork.** None ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
+- **Header and navigation.** The header takes the game colour. GSAP slides the nav pill to the active page, and the bar tightens once the page scrolls.
+- **Posters.** Each game has a 3:4 poster (`components/Poster.tsx`), used in the game picker and as the tilting hero card. The repo ships no game artwork: by default the poster is drawn from the game's colour, monogram and currency icon. To use licensed key art, for example from the publisher's media kit or under your reseller agreement, put the file in `public/posters/` and set `image: "/posters/<slug>.jpg"` for that game in `src/shared/games.ts`. If the file fails to load, the drawn poster shows instead.
 
 ## Pricing
 

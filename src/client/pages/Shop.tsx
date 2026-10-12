@@ -7,7 +7,8 @@ import { type GameConfig, findGame } from "../../shared/games";
 import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, shortLabel, timeAgo } from "../lib/format";
-import { type GameTheme, BRAND, themeFor } from "../lib/gameTheme";
+import { Poster } from "../components/Poster";
+import { type GameTheme, BRAND, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { newClientToken, orderPath, saveOrder } from "../lib/storage";
 
@@ -48,7 +49,7 @@ export function Shop() {
   const latest = current ? activity.find((a) => a.gameSlug === current.slug) : undefined;
 
   return (
-    <Themed theme={theme} slug={current?.slug ?? null}>
+    <Themed theme={theme}>
       <Hero theme={theme} game={current ?? null} games={games} latest={latest} loading={!data && !error} />
       <div className="relative mx-auto max-w-5xl px-4 pb-32 lg:pb-14">
         <div className="-mt-14 sm:-mt-16">
@@ -92,85 +93,109 @@ export function Shop() {
   );
 }
 
-/**
- * Holds the game colour as CSS variables. The first colour is set inline; after
- * that GSAP owns the variables and blends from one game's colour to the next.
- */
-function Themed({ theme, slug, children }: { theme: GameTheme; slug: string | null; children: ReactNode }) {
-  const root = useRef<HTMLDivElement>(null);
-  const [initial] = useState(() => ({ "--game": theme.color, "--game-ink": theme.ink }) as React.CSSProperties);
-  const first = useRef(true);
-  useGSAP(
-    () => {
-      const vars = { "--game": theme.color, "--game-ink": theme.ink };
-      if (first.current) {
-        first.current = false;
-        gsap.set(root.current, vars);
-        return;
-      }
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      gsap.to(root.current, { ...vars, duration: reduce ? 0 : 0.6, ease: "power2.inOut" });
-    },
-    { dependencies: [theme.color, slug] },
-  );
-  return (
-    <div ref={root} style={initial}>
-      {children}
-    </div>
-  );
+function Themed({ theme, children }: { theme: GameTheme; children: ReactNode }) {
+  useGameColour(theme);
+  return <div>{children}</div>;
 }
 
 function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game: GameSummary | null; games: GameSummary[]; latest?: ActivityItem; loading: boolean }) {
   const root = useRef<HTMLElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const { Icon } = theme;
+
+  // Game change: the name wipes up, the poster flips in from the side.
   useGSAP(
     () => {
       if (!game) return;
       motionOK(() => {
         gsap
           .timeline({ defaults: { ease: "expo.out" } })
-          .from("[data-hero-title]", { yPercent: 105, duration: 0.8 })
-          .from("[data-hero-sub]", { opacity: 0, y: 8, duration: 0.6, stagger: 0.06 }, "-=0.55")
-          .from("[data-hero-icon]", { rotate: -30, scale: 0.7, opacity: 0, duration: 1.1 }, 0);
+          .from("[data-hero-title]", { yPercent: 105, duration: 0.85 })
+          .from("[data-hero-sub]", { opacity: 0, y: 10, duration: 0.6, stagger: 0.06 }, "-=0.6")
+          .from(card.current, { rotateY: -55, rotateZ: -6, x: 60, opacity: 0, duration: 1.1, transformPerspective: 900 }, 0)
+          .from("[data-hero-icon]", { rotate: -40, scale: 0.6, opacity: 0, duration: 1.3 }, 0);
       });
     },
     { scope: root, dependencies: [game?.slug] },
   );
+
+  // The poster leans toward the pointer. Mouse and pen only, and only with motion on.
+  useGSAP(
+    () => {
+      const el = card.current;
+      const area = root.current;
+      if (!el || !area) return;
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference) and (pointer: fine)", () => {
+        const rx = gsap.quickTo(el, "rotateX", { duration: 0.6, ease: "power3.out" });
+        const ry = gsap.quickTo(el, "rotateY", { duration: 0.6, ease: "power3.out" });
+        gsap.set(el, { transformPerspective: 900 });
+        const move = (e: PointerEvent) => {
+          const r = area.getBoundingClientRect();
+          ry(((e.clientX - r.left) / r.width - 0.5) * 16);
+          rx(-((e.clientY - r.top) / r.height - 0.5) * 12);
+        };
+        const leave = () => {
+          rx(0);
+          ry(0);
+        };
+        area.addEventListener("pointermove", move);
+        area.addEventListener("pointerleave", leave);
+        return () => {
+          area.removeEventListener("pointermove", move);
+          area.removeEventListener("pointerleave", leave);
+        };
+      });
+    },
+    { scope: root },
+  );
+
   return (
     <section ref={root} className="relative overflow-hidden bg-[var(--game)] text-[var(--game-ink)]">
-      <Icon data-hero-icon weight="fill" aria-hidden className="pointer-events-none absolute -right-16 -top-10 size-[22rem] rotate-[14deg] opacity-[0.13] sm:-right-6 sm:-top-14 sm:size-[30rem]" />
-      <div className="relative mx-auto max-w-5xl px-4 pb-24 pt-4 sm:pb-28 sm:pt-6">
-        <GamePicker games={games} active={game?.slug ?? null} />
-        <div className="mt-8 min-h-[9.5rem] sm:mt-12 sm:min-h-[11rem]">
-          {game ? (
-            <>
-              <p data-hero-sub className="text-sm font-medium opacity-80">
-                {game.publisher} · {game.tagline}
-              </p>
-              <h1 className="mt-1 overflow-hidden pb-1">
-                <span data-hero-title className="block text-[2.7rem] font-extrabold leading-[0.95] tracking-[-0.035em] sm:text-[4.5rem]">
-                  {game.name}
-                </span>
-              </h1>
-              <ul data-hero-sub className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium">
-                <Fact Icon={Lightning}>Masuk otomatis setelah bayar</Fact>
-                <Fact Icon={QrCode}>QRIS, semua bank dan e-wallet</Fact>
-                <Fact Icon={UserCircleMinus}>Tanpa daftar akun</Fact>
-              </ul>
-              {latest ? (
-                <p data-hero-sub className="mt-4 inline-flex items-center gap-2 rounded-full bg-[color-mix(in_oklab,var(--game-ink)_14%,transparent)] px-3 py-1 text-sm">
-                  <span className="size-1.5 rounded-full bg-current" aria-hidden />
-                  Terakhir berhasil: {shortLabel(latest.product, latest.game)}, {timeAgo(latest.completedAt)}
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_40%,color-mix(in_oklab,var(--game-deep)_55%,transparent))]" aria-hidden />
+      <Icon data-hero-icon weight="fill" aria-hidden className="pointer-events-none absolute -left-24 bottom-[-6rem] size-[24rem] rotate-[18deg] opacity-[0.1]" />
+      <div className="relative mx-auto grid max-w-5xl gap-6 px-4 pb-24 pt-5 sm:pb-28 md:grid-cols-[minmax(0,1fr)_15rem] md:items-end md:pt-8">
+        <div className="min-w-0">
+          <GamePicker games={games} active={game?.slug ?? null} />
+          <div className="mt-7 min-h-[10rem] sm:mt-10">
+            {game ? (
+              <>
+                <p data-hero-sub className="text-sm font-semibold opacity-80">
+                  {game.publisher} · {game.tagline}
                 </p>
-              ) : null}
-            </>
-          ) : loading ? (
-            <div aria-hidden className="grid gap-3 opacity-30">
-              <div className="h-4 w-40 rounded bg-current" />
-              <div className="h-14 w-80 max-w-full rounded bg-current" />
-            </div>
-          ) : null}
+                <h1 className="mt-1 overflow-hidden pb-1">
+                  <span data-hero-title className="block text-[2.7rem] font-extrabold leading-[0.95] tracking-[-0.035em] sm:text-[4.25rem]">
+                    {game.name}
+                  </span>
+                </h1>
+                <ul data-hero-sub className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+                  <Fact Icon={Lightning}>Masuk otomatis setelah bayar</Fact>
+                  <Fact Icon={QrCode}>QRIS, semua bank dan e-wallet</Fact>
+                  <Fact Icon={UserCircleMinus}>Tanpa daftar akun</Fact>
+                </ul>
+                {latest ? (
+                  <p data-hero-sub className="mt-4 inline-flex items-center gap-2 rounded-full bg-[color-mix(in_oklab,var(--game-ink)_14%,transparent)] px-3 py-1 text-sm">
+                    <span className="relative flex size-2" aria-hidden>
+                      <span className="absolute inset-0 animate-ping rounded-full bg-current opacity-60 motion-reduce:animate-none" />
+                      <span className="relative size-2 rounded-full bg-current" />
+                    </span>
+                    Terakhir berhasil: {shortLabel(latest.product, latest.game)}, {timeAgo(latest.completedAt)}
+                  </p>
+                ) : null}
+              </>
+            ) : loading ? (
+              <div aria-hidden className="grid gap-3 opacity-30">
+                <div className="h-4 w-40 rounded bg-current" />
+                <div className="h-14 w-80 max-w-full rounded bg-current" />
+              </div>
+            ) : null}
+          </div>
         </div>
+        {game ? (
+          <div ref={card} className="relative hidden w-[15rem] rotate-[3deg] md:block" style={{ transformStyle: "preserve-3d" }}>
+            <Poster slug={game.slug} name={game.name} image={game.image} className="rounded-[18px] shadow-[0_30px_60px_-20px_rgb(0_0_0/0.55)] ring-1 ring-black/10" />
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -185,25 +210,41 @@ function Fact({ Icon, children }: { Icon: typeof Lightning; children: ReactNode 
   );
 }
 
+/** Small posters for every game; the active one stands up and gets a ring. */
 function GamePicker({ games, active }: { games: GameSummary[]; active: string | null }) {
-  if (games.length === 0) return <div className="h-9" />;
+  const root = useRef<HTMLUListElement>(null);
+  useGSAP(
+    () => {
+      motionOK(() => {
+        gsap.from("[data-pick]", { y: 18, opacity: 0, duration: 0.7, ease: "expo.out", stagger: 0.06 });
+      });
+    },
+    { scope: root, dependencies: [games.length] },
+  );
+  if (games.length === 0) return <div className="h-[6.5rem]" />;
   return (
     <nav aria-label="Pilih game">
-      <ul className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none]">
+      <ul ref={root} className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-2 pt-1 [scrollbar-width:none]">
         {games.map((g) => {
           const on = g.slug === active;
           return (
-            <li key={g.slug} className="shrink-0">
+            <li key={g.slug} data-pick className="shrink-0">
               <Link
                 to={`/game/${g.slug}`}
                 aria-current={on ? "page" : undefined}
-                className={`press inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold ${
-                  on
-                    ? "bg-[var(--game-ink)] text-[var(--game)]"
-                    : "bg-[color-mix(in_oklab,var(--game-ink)_12%,transparent)] hover:bg-[color-mix(in_oklab,var(--game-ink)_22%,transparent)]"
-                }`}
+                aria-label={g.name}
+                className={`group block w-[4.75rem] transition-transform duration-300 ease-[var(--ease-out)] sm:w-[5.25rem] ${on ? "-translate-y-1" : "hover:-translate-y-0.5"}`}
               >
-                {g.name}
+                <span
+                  className={`block overflow-hidden rounded-[12px] transition-[box-shadow,opacity] duration-300 ${
+                    on ? "shadow-[0_0_0_2.5px_var(--game-ink),0_14px_28px_-12px_rgb(0_0_0/0.6)]" : "opacity-75 group-hover:opacity-100"
+                  }`}
+                >
+                  <Poster slug={g.slug} name={g.name} image={g.image} />
+                </span>
+                <span className={`mt-1.5 block truncate text-center text-[11px] font-semibold ${on ? "" : "opacity-75"}`}>
+                  {g.startingPrice !== null ? `dari ${idr(g.startingPrice)}` : "Segera"}
+                </span>
               </Link>
             </li>
           );
@@ -429,7 +470,9 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
           </dl>
           <div className="mx-5 mt-4 border-t border-dashed border-[color-mix(in_oklab,var(--bg)_25%,transparent)] pt-4">
             <p className="text-xs opacity-60">Total</p>
-            <p className="text-[2rem] font-bold leading-tight tracking-tight tabular">{product ? idr(product.price) : "Rp -"}</p>
+            <p className="text-[2rem] font-bold leading-tight tracking-tight tabular">
+              <CountUp value={product?.price ?? null} />
+            </p>
           </div>
           <div className="px-5 pb-5 pt-3">
             {submitError ? (
@@ -453,13 +496,43 @@ function Checkout({ game, config, theme, catalogReady }: { game: GameSummary; co
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-xs text-ink-3">{productLabel ?? "Belum pilih nominal"}</p>
-            <p className="text-xl font-bold tracking-tight tabular">{product ? idr(product.price) : "Rp -"}</p>
+            <p className="text-xl font-bold tracking-tight tabular">
+              <CountUp value={product?.price ?? null} />
+            </p>
           </div>
           <PayButton loading={submitting} short />
         </div>
       </div>
     </form>
   );
+}
+
+/** The total rolls to the new price instead of jumping. */
+function CountUp({ value }: { value: number | null }) {
+  const el = useRef<HTMLSpanElement>(null);
+  const shown = useRef<number | null>(null);
+  useGSAP(
+    () => {
+      const node = el.current;
+      if (!node) return;
+      const from = shown.current;
+      shown.current = value;
+      if (value === null) {
+        node.textContent = "Rp -";
+        return;
+      }
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (from === null || reduce) {
+        node.textContent = idr(value);
+        return;
+      }
+      const o = { v: from };
+      gsap.to(o, { v: value, duration: 0.6, ease: "power3.out", onUpdate: () => (node.textContent = idr(Math.round(o.v))) });
+    },
+    { dependencies: [value], revertOnUpdate: false },
+  );
+  // GSAP owns the text (written before paint), so React never fights the tween.
+  return <span ref={el} aria-live="polite" />;
 }
 
 function PayButton({ loading, className = "", short }: { loading: boolean; className?: string; short?: boolean }) {

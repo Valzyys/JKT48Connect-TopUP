@@ -32,6 +32,10 @@
   --shadow-ambient: 0 1px 2px rgb(27 26 25 / 0.06);
   --shadow-raised: 0 1px 2px rgb(27 26 25 / 0.06), 0 6px 20px -8px rgb(27 26 25 / 0.14);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Brand red until a game page sets its own colour (lib/gameTheme.ts). */
+  --game: #c8102e;
+  --game-ink: #ffffff;
+  --game-deep: #5e0012;
 }
 
 :root[data-theme="dark"] {
