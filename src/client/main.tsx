@@ -1,9 +1,10 @@
-import { StrictMode, Suspense, lazy, useEffect } from "react";
+import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
+import { useSmoothScroll } from "./lib/smoothScroll";
 import { useTheme } from "./lib/theme";
 import { Lookup } from "./pages/Lookup";
 import { Order } from "./pages/Order";
@@ -28,9 +29,7 @@ function NotFound() {
 function Pages() {
   const { pathname } = useLocation();
   const shop = pathname === "/" || pathname.startsWith("/game/");
-  useEffect(() => {
-    if (!shop) window.scrollTo(0, 0);
-  }, [pathname, shop]);
+  useSmoothScroll();
   return (
     // Keyed by page: an error on one page never blanks the next one. Switching
     // games stays inside the shop, so its state and catalog survive.

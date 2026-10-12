@@ -77,17 +77,24 @@ Customer-facing messages are derived in `src/worker/services/state.ts` ("Menungg
 - **Catalog outages** keep the last successful sync and mark it stale. Products missing from a newer sync become unavailable.
 
 ## Storefront design
+The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surfaces, and the current game's colour throughout.
+
 - **One checkout page.** `/` and `/game/<slug>` show the same screen:
-  - a coloured hero with the game picker and the game name;
-  - three numbered steps: account, denomination tiles, and a dark pay card (a bottom bar on phones);
-  - an FAQ.
+  - a floating glass header;
+  - a hero with an animated grainy gradient in the game's colours (React Bits Grainient, WebGL, paused off-screen);
+  - poster cards to pick the game;
+  - three steps: account, denomination tiles, and a pay card (a floating glass bar on phones);
+  - "Cara top-up" and an FAQ.
   
   The catalog loads once, so switching games is instant. `?item=<code>` preselects a denomination.
-- **Per-game colour.** Each game has its own colour and currency icon (`src/client/lib/gameTheme.ts`). When the visitor switches games, GSAP blends the page from one game's colour to the next. Denomination tiles show one to three currency icons, so pack size reads at a glance. The hero shows the game's last completed top-up from `/api/activity` (real orders only).
-- **Order page.** It shows the status, a three-step progress bar (Bayar, Diproses, Selesai), the QRIS with a countdown, the SN once the top-up is done, and the order details. When the page sees the payment confirmed or the top-up finish live, GSAP springs the status icon in, fills the progress bar, and a toast appears. All motion is skipped under `prefers-reduced-motion`.
+- **Motion.** All motion is GSAP, and every effect is skipped under `prefers-reduced-motion`.
+  - Page-level: Lenis smooth scrolling is driven by the GSAP ticker and synced with ScrollTrigger (`lib/smoothScroll.ts`). The page colour blends when switching games.
+  - Hero: the title animates letter by letter (GSAP SplitText), and the poster floats and tilts toward the pointer.
+  - Checkout and lower sections: cards have a pointer spotlight (SpotlightCard), tiles spark on click (ClickSpark), the pay button is magnetic (Magnet), the total counts up to a new price, and sections reveal on scroll (AnimatedContent).
+- **React Bits.** The components live in `src/client/components/bits/`. They are adapted from [React Bits](https://reactbits.dev) by David Haz (MIT + Commons Clause, which allows use inside this app). Each file notes what changed.
+- **Order page.** It shows the status, a three-step progress bar, the QRIS with a countdown, the SN when done, and the details. When the page sees the payment confirmed or the top-up finish live, the status icon springs in and a toast appears.
 - **Errors.** A render error shows a message and a reload button under the normal header instead of a blank page. The error boundary resets on every page change, and a stale JS chunk after a redeploy triggers one automatic reload.
-- **Type and colour.** The platform's own UI font (no web fonts) on a warm neutral base, with the game colour as the accent. Light and dark themes.
-- **Game artwork.** None ships with the repo. `image` in `src/shared/games.ts` is reserved for licensed key art.
+- **Posters.** By default each game's 3:4 poster (`components/Poster.tsx`) is drawn from its colour, monogram and currency icon. To use licensed key art, put the file in `public/posters/` and set `image` in `src/shared/games.ts`.
 
 ## Pricing
 
