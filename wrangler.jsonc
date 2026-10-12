@@ -14,8 +14,7 @@
     {
       "binding": "DB",
       "database_name": "jkt48connect-topup",
-      // Replace with the id printed by `wrangler d1 create jkt48connect-topup`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "47c8a8c2-9957-4022-b98e-f0b3348a4029",
       "migrations_dir": "migrations"
     }
   ],
