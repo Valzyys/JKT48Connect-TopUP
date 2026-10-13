@@ -38,7 +38,7 @@ export function Lookup() {
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-8 px-4 py-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="mx-auto grid max-w-7xl gap-8 px-4 py-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section aria-labelledby="lookup-title">
         <h1 id="lookup-title" className="text-xl font-semibold">
           Cek pesanan

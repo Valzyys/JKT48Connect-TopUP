@@ -63,7 +63,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <header className="sticky top-3 z-40 px-3">
         <div
           data-bar
-          className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-2 rounded-full border border-white/50 bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] pl-2 pr-1.5 shadow-[0_8px_30px_-16px_rgb(0_0_0/0.25)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10"
+          className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 rounded-full border border-white/50 bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] pl-2 pr-1.5 shadow-[0_8px_30px_-16px_rgb(0_0_0/0.25)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10"
         >
           <Link to="/" className="press flex shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-1 min-[420px]:pr-3" aria-label="JKT48Connect TopUp, halaman utama">
             <span className="grid size-10 place-items-center rounded-full bg-[linear-gradient(140deg,var(--game),var(--game-deep))] text-[15px] font-extrabold text-[var(--game-ink)] shadow-[0_6px_16px_-6px_var(--game)]">
@@ -136,7 +136,7 @@ function Footer() {
   );
   return (
     <footer ref={root} className="mt-20 px-3 pb-3 max-lg:pb-28">
-      <div data-footer-card className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-6 py-10 text-[var(--game-ink)] sm:px-10">
+      <div data-footer-card className="relative mx-auto max-w-7xl overflow-hidden rounded-[36px] bg-[linear-gradient(140deg,var(--game),var(--game-deep))] px-6 py-10 text-[var(--game-ink)] sm:px-10">
         <span data-wordmark aria-hidden className="pointer-events-none absolute -bottom-10 -right-4 select-none text-[11rem] font-extrabold leading-none tracking-[-0.06em] opacity-[0.08] sm:text-[16rem]">
           JKT48
         </span>
@@ -158,7 +158,7 @@ function Footer() {
         </div>
       </div>
 
-      <div data-footer-card className="mx-auto mt-3 grid max-w-6xl gap-8 rounded-[36px] bg-surface px-6 py-10 shadow-raised ring-1 ring-line sm:px-10 md:grid-cols-[1.3fr_1fr_0.8fr_1.1fr]">
+      <div data-footer-card className="mx-auto mt-3 grid max-w-7xl gap-8 rounded-[36px] bg-surface px-6 py-10 shadow-raised ring-1 ring-line sm:px-10 md:grid-cols-[1.3fr_1fr_0.8fr_1.1fr]">
         <div>
           <div className="flex items-center gap-2.5">
             <span className="grid size-10 place-items-center rounded-full bg-[linear-gradient(140deg,var(--game),var(--game-deep))] font-extrabold text-[var(--game-ink)]">J</span>
@@ -210,7 +210,7 @@ function Footer() {
           <p className="mt-3 text-xs text-ink-3">Semua aplikasi yang bisa scan QRIS.</p>
         </div>
       </div>
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-6 py-5 text-xs text-ink-3 sm:px-10">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-6 py-5 text-xs text-ink-3 sm:px-10">
         <p>© {new Date().getFullYear()} JKT48Connect TopUp</p>
         <p>Nama dan logo game adalah milik pemiliknya masing-masing.</p>
       </div>

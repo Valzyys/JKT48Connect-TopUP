@@ -12,6 +12,12 @@ import { isRecord, parseJson, providerFetch } from "../lib/http";
  *
  * Only PAID and UNPAID are documented payment statuses. Anything else is
  * reported as UNDOCUMENTED and never changes an order to paid or failed.
+ *
+ * The documented fields are read leniently in form but strictly in meaning:
+ * status words in any letter case, trx_id as a string or a number, amounts as
+ * whole numbers written with or without ".00", and a top-level status of
+ * true, "true" or 1. The trx_id and the amount still have to match the invoice
+ * exactly, so a looser format can never mark the wrong payment as paid.
  */
 
 export type CreatePaymentParsed =
@@ -43,12 +49,26 @@ function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
+/** A transaction id, sent as a string or a number. */
+function id(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+  return str(value);
+}
+
+/** A whole-rupiah amount: 23412, "23412" or "23412.00". Fractions of a rupiah are rejected. */
 function amount(value: unknown): number | null {
   if (typeof value === "number") return Number.isInteger(value) && value > 0 ? value : null;
-  if (typeof value === "string" && /^\d{1,12}$/.test(value.trim())) {
-    const n = Number(value.trim());
-    return n > 0 ? n : null;
-  }
+  const m = typeof value === "string" ? /^(\d{1,12})(?:\.0+)?$/.exec(value.trim()) : null;
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n > 0 ? n : null;
+}
+
+/** The top-level `status` flag: true on success. Also accepts "true" and 1; null when absent or unrecognised. */
+function flag(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (value === 1 || value === "1" || value === "true") return true;
+  if (value === 0 || value === "0" || value === "false") return false;
   return null;
 }
 
@@ -70,12 +90,13 @@ function message(json: Record<string, unknown>): string {
 
 export function parseCreatePayment(text: string): CreatePaymentParsed {
   const json = parseJson(text);
-  if (!isRecord(json) || typeof json.status !== "boolean") {
+  const ok = isRecord(json) ? flag(json.status) : null;
+  if (!isRecord(json) || ok === null) {
     return { ok: false, reason: "malformed", message: "Unexpected createpayment response", trxId: null };
   }
   const data = isRecord(json.data) ? json.data : null;
-  const trxId = data ? str(data.trx_id) : null;
-  if (json.status !== true) return { ok: false, reason: "rejected", message: message(json) || "Payment was not created", trxId };
+  const trxId = data ? id(data.trx_id) : null;
+  if (!ok) return { ok: false, reason: "rejected", message: message(json) || "Payment was not created", trxId };
   const amt = data ? amount(data.amount) : null;
   if (!data || !trxId || amt === null) {
     return { ok: false, reason: "malformed", message: "createpayment response is missing trx_id or amount", trxId };
@@ -91,29 +112,32 @@ export function parseCreatePayment(text: string): CreatePaymentParsed {
 /** Validates a checkstatus response against the stored invoice before it is trusted. */
 export function parseCheckStatus(text: string, expected: { trxId: string; amount: number }): CheckStatusParsed {
   const json = parseJson(text);
-  if (!isRecord(json) || typeof json.status !== "boolean") return { kind: "INVALID", message: "Unexpected checkstatus response" };
-  if (json.status !== true) return { kind: "INVALID", message: message(json) || "Payment status unavailable" };
+  const ok = isRecord(json) ? flag(json.status) : null;
+  if (!isRecord(json) || ok === null) return { kind: "INVALID", message: "Unexpected checkstatus response" };
+  if (!ok) return { kind: "INVALID", message: message(json) || "Payment status unavailable" };
   const data = isRecord(json.data) ? json.data : null;
   if (!data) return { kind: "INVALID", message: "checkstatus response has no data" };
-  const trxId = str(data.trx_id);
+  const trxId = id(data.trx_id);
   if (!trxId) return { kind: "INVALID", message: "checkstatus response has no trx_id" };
   if (trxId !== expected.trxId) return { kind: "TRX_MISMATCH", returnedTrxId: trxId, message: "Returned trx_id does not match the invoice" };
   const status = str(data.status);
+  const word = status?.toUpperCase();
   const amt = amount(data.amount);
-  if (status === "PAID") {
+  if (word === "PAID") {
     if (amt !== expected.amount) {
       return { kind: "AMOUNT_MISMATCH", returnedAmount: amt, expectedAmount: expected.amount, message: "Paid amount does not match the invoice" };
     }
     return { kind: "PAID", amount: amt, paidAtRaw: str(data.paid_at), message: message(json) };
   }
-  if (status === "UNPAID") return { kind: "UNPAID", amount: amt, expiredAtRaw: str(data.expired_at), message: message(json) };
+  if (word === "UNPAID") return { kind: "UNPAID", amount: amt, expiredAtRaw: str(data.expired_at), message: message(json) };
   return { kind: "UNDOCUMENTED", rawStatus: (status ?? String(data.status)).slice(0, 40), message: message(json) };
 }
 
 export function parseCancelPayment(text: string): CancelParsed {
   const json = parseJson(text);
-  if (!isRecord(json) || typeof json.status !== "boolean") return { confirmed: false, message: "Unexpected cancelpayment response" };
-  return { confirmed: json.status === true, message: message(json) };
+  const ok = isRecord(json) ? flag(json.status) : null;
+  if (!isRecord(json) || ok === null) return { confirmed: false, message: "Unexpected cancelpayment response" };
+  return { confirmed: ok, message: message(json) };
 }
 
 function requireKey(config: Config): string {
@@ -142,7 +166,14 @@ export async function createPayment(config: Config, requestedAmount: number): Pr
 export async function checkPaymentStatus(config: Config, expected: { trxId: string; amount: number }): Promise<CheckStatusParsed> {
   const res = await post(config, "checkstatus", { trxid: expected.trxId }, 10_000);
   if (!res.ok && !res.text) return { kind: "INVALID", message: `MYPG responded HTTP ${res.status}` };
-  return parseCheckStatus(res.text, expected);
+  const parsed = parseCheckStatus(res.text, expected);
+  // When the answer cannot be read as PAID or UNPAID, keep what MYPG actually
+  // sent next to the reason, so the admin console shows the real response.
+  if (parsed.kind === "INVALID" || parsed.kind === "UNDOCUMENTED") {
+    const body = res.text.split(requireKey(config)).join("[api_key]").replace(/\s+/g, " ").trim().slice(0, 180);
+    return { ...parsed, message: `${parsed.message} | HTTP ${res.status}: ${body}` };
+  }
+  return parsed;
 }
 
 export async function cancelPayment(config: Config, trxId: string): Promise<CancelParsed> {
