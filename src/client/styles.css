@@ -144,23 +144,10 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
-/* Pressable feedback. Gated so touch taps do not leave sticky hover states. */
+/* Pressable element. The press motion itself is GSAP (useMicroMotion in
+   lib/motion.ts), so there is no CSS transition here to fight it. */
 @utility press {
-  transition:
-    transform 160ms var(--ease-out),
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
-  &:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
+  touch-action: manipulation;
 }
 
 @keyframes shimmer {
@@ -176,16 +163,10 @@ p {
   border-radius: var(--radius-control);
 }
 
-@utility rise {
-  animation: rise 280ms var(--ease-out) both;
-}
-
+/* The shimmer stays CSS on purpose: it plays while the page is loading and
+   the main thread is busy, where a CSS animation keeps running smoothly. */
 @media (prefers-reduced-motion: reduce) {
-  .rise,
   .skeleton {
     animation: none;
-  }
-  .press:active:not(:disabled) {
-    transform: none;
   }
 }

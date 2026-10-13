@@ -107,8 +107,9 @@ The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surface
   - "Cara top-up" and an FAQ.
   
   The catalog loads once, so switching games is instant. `?item=<code>` preselects a denomination.
-- **Motion.** All motion is GSAP, and every effect is skipped under `prefers-reduced-motion`.
-  - Page-level: Lenis smooth scrolling is driven by the GSAP ticker and synced with ScrollTrigger (`lib/smoothScroll.ts`). The page colour blends when switching games.
+- **Motion.** All motion is GSAP and animates only `transform` and `opacity`; every effect is skipped under `prefers-reduced-motion`. The only CSS animations left are the loading spinner, the skeleton shimmer and the "live" dot, which play while the page is loading and must not depend on a busy main thread.
+  - Page-level: Lenis smooth scrolling is driven by the GSAP ticker and synced with ScrollTrigger (`lib/smoothScroll.ts`); scrubbed effects use `scrub: true` so they follow Lenis exactly. When switching games the hero crossfades between the two games' gradients (opacity), while the page colour variables switch in one step (tweening inherited variables restyles the whole page every frame).
+  - Hover and press: `useMicroMotion` (`lib/motion.ts`) gives `data-lift` elements a hover rise (with optional poster zoom and fade) and `.press` / `data-press` elements a press-and-spring, delegated from the document. Category tabs have a sliding pill, a chosen denomination pops, and carets and FAQ answers turn and settle with GSAP.
   - Hero: the title animates letter by letter (GSAP SplitText), and the poster floats and tilts toward the pointer.
   - Scroll parallax (ScrollTrigger, scrubbed):
     - the hero copy sinks while the gradient swells and the poster rises;
@@ -116,7 +117,9 @@ The look is soft: Plus Jakarta Sans, large radii, diffuse shadows, glass surface
     - step numbers float;
     - the footer wordmark slides sideways.
   - Checkout and lower sections: cards have a pointer spotlight (SpotlightCard), tiles spark on click (ClickSpark), the pay button is magnetic (Magnet), the total counts up to a new price, and sections reveal on scroll (AnimatedContent).
-- **Performance.** Measured on a phone profile (390px, 4x CPU slowdown):
+- **Performance.**
+  - Desktop (1366px, Chromium trace while scrolling with the mouse over the checkout): the old SpotlightCard repainted card-sized gradients every frame from window-wide listeners; rewritten to move a fixed light with transforms, raster work while scrolling fell from about 6.1 s to 0.5 s per 2 s, and script per frame from about 1.0 s to 0.2 s per 2 s. The header no longer animates its height, width and shadow, and nothing that moves on scroll uses `backdrop-filter`.
+  - Phone profile (390px, 4x CPU slowdown):
   - Before: with the WebGL hero, the page managed 12 frames in 2 seconds while idle. Now it runs at 60 fps (16.7 ms frames at the 95th percentile).
   - The page background is a fixed layer, not `background-attachment: fixed`, which repaints on every scroll step.
   - The ClickSpark canvas only has pixels while sparks are on screen.

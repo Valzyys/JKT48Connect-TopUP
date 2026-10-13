@@ -1,10 +1,11 @@
 import { ArrowRight, Receipt } from "@phosphor-icons/react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { OrderLookupView } from "../../shared/api";
 import { Button, Field, Input, Notice, useFieldId } from "../components/ui";
 import { api, ApiRequestError } from "../lib/api";
 import { idr, wibDateTime } from "../lib/format";
+import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { orderPath, savedOrders } from "../lib/storage";
 
 export function Lookup() {
@@ -18,6 +19,18 @@ export function Lookup() {
   const refId = useFieldId("ref");
   const userFieldId = useFieldId("uid");
   const zoneFieldId = useFieldId("zone");
+  const resultCard = useRef<HTMLDivElement>(null);
+
+  // A found order settles in below the form.
+  useGSAP(
+    () => {
+      if (!result) return;
+      motionOK(() => {
+        gsap.from(resultCard.current, { y: 12, opacity: 0, duration: 0.5, ease: "power3.out" });
+      });
+    },
+    { dependencies: [result?.ref] },
+  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -63,7 +76,7 @@ export function Lookup() {
         </form>
 
         {result ? (
-          <div className="rise mt-5 rounded-[26px] bg-surface p-5 shadow-raised ring-1 ring-line" role="status">
+          <div ref={resultCard} className="mt-5 rounded-[26px] bg-surface p-5 shadow-raised ring-1 ring-line" role="status">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="font-mono font-semibold tabular">{result.ref}</p>
               <p className="text-sm text-ink-3">{wibDateTime(result.createdAt)}</p>
@@ -95,7 +108,7 @@ export function Lookup() {
           <ul className="mt-4 grid gap-2">
             {orders.map((o) => (
               <li key={o.ref}>
-                <Link to={orderPath(o.ref, o.token)} className="press flex items-center justify-between gap-4 rounded-[20px] bg-surface px-5 py-3.5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-line transition-shadow hover:shadow-raised">
+                <Link to={orderPath(o.ref, o.token)} data-lift="3" className="press flex items-center justify-between gap-4 rounded-[20px] bg-surface px-5 py-3.5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-line">
                   <span className="min-w-0">
                     <span className="block font-mono text-sm font-medium tabular">{o.ref}</span>
                     <span className="block truncate text-sm text-ink-2">

@@ -7,11 +7,11 @@ import { gsap } from 'gsap';
 // Local changes: colours blend with GSAP when they change, reduced motion renders
 // one still frame, and a missing WebGL context fails quietly (the parent keeps a
 // CSS gradient underneath). For speed it renders at half the CSS resolution (the
-// picture is a soft blur, so upscaling is invisible) and animates at 30 fps.
+// picture is a soft blur, so upscaling is invisible); it animates at the display's
+// own frame rate, since skipping frames made the drift look stepped.
 
 /** Drawing-buffer pixels per CSS pixel. */
 const RENDER_SCALE = 0.5;
-const FRAME_MS = 1000 / 30;
 
 interface GrainientProps {
   timeSpeed?: number;
@@ -263,11 +263,8 @@ const Grainient: React.FC<GrainientProps> = ({
     let isPageVisible = !document.hidden;
     const t0 = performance.now();
 
-    let last = 0;
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop);
-      if (t - last < FRAME_MS) return;
-      last = t;
       (program.uniforms.iTime as { value: number }).value = (t - t0) * 0.001;
       renderer.render({ scene: mesh });
     };

@@ -41,20 +41,27 @@ export function themeFor(slug: string | null | undefined): GameTheme {
 
 /**
  * Puts the game colour on the document root, where the header, hero and pay
- * button read it. The first colour is applied at once; later changes blend.
+ * button read it. It is set in one step, never tweened: these variables are
+ * inherited by the whole page, so animating them restyles every element on
+ * every frame and made game switches stutter. The hero blends between colours
+ * on its own (an opacity crossfade, see Shop's Backdrop).
  */
 export function useGameColour(theme: GameTheme) {
   useGSAP(
     () => {
-      const root = document.documentElement;
-      const vars = { "--game": theme.color, "--game-ink": theme.ink, "--game-deep": theme.deep };
-      const current = getComputedStyle(root).getPropertyValue("--game").trim().toLowerCase();
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (current === theme.color.toLowerCase() || reduce) gsap.set(root, vars);
-      else gsap.to(root, { ...vars, duration: 0.6, ease: "power2.inOut", overwrite: true });
+      gsap.set(document.documentElement, { "--game": theme.color, "--game-ink": theme.ink, "--game-deep": theme.deep });
     },
     { dependencies: [theme.color], revertOnUpdate: false },
   );
+}
+
+/** The hero's backdrop for a game, drawn from its colours (no CSS variables, so layers can crossfade). */
+export function heroGradient(theme: GameTheme): string {
+  return [
+    `radial-gradient(60% 45% at 18% 12%, ${mixHex(theme.color, "#ffffff", 0.45)} 0%, transparent 70%)`,
+    `radial-gradient(70% 60% at 90% 80%, ${theme.deep} 0%, transparent 75%)`,
+    `linear-gradient(140deg, ${theme.color}, ${theme.deep})`,
+  ].join(", ");
 }
 
 /** Linear blend of two #rrggbb colours; t = 0 gives `a`, t = 1 gives `b`. */

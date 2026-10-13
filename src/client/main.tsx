@@ -4,6 +4,7 @@ import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
+import { useMicroMotion } from "./lib/motion";
 import { useSmoothScroll } from "./lib/smoothScroll";
 import { useTheme } from "./lib/theme";
 import { Shop } from "./pages/Shop";
@@ -33,6 +34,7 @@ function Pages() {
   const { pathname } = useLocation();
   const shop = pathname === "/" || pathname.startsWith("/game/");
   useSmoothScroll();
+  useMicroMotion();
   return (
     // Keyed by page: an error on one page never blanks the next one. Switching
     // games stays inside the shop, so its state and catalog survive.
