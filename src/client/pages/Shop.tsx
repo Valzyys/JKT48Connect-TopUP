@@ -14,7 +14,7 @@ import { Button, Field, Input, Notice, Skeleton, useFieldId } from "../component
 import { api, ApiRequestError } from "../lib/api";
 import { idr, shortLabel, timeAgo } from "../lib/format";
 import { categoryLabel, categoryOf, parseOffer, sortCategories } from "../lib/offer";
-import { type GameTheme, BRAND, mixHex, themeFor, useGameColour } from "../lib/gameTheme";
+import { type GameTheme, BRAND, heroGradient, mixHex, themeFor, useGameColour } from "../lib/gameTheme";
 import { gsap, motionOK, useGSAP } from "../lib/motion";
 import { scrollToElement } from "../lib/smoothScroll";
 import { newClientToken, orderPath, saveOrder, savedOrders } from "../lib/storage";
@@ -123,7 +123,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
       motionOK(() => {
         gsap
           .timeline({ defaults: { ease: "expo.out" } })
-          .from("[data-hero-sub]", { opacity: 0, y: 14, filter: "blur(6px)", duration: 0.8, stagger: 0.07, clearProps: "filter" }, 0.15)
+          .from("[data-hero-sub]", { opacity: 0, y: 14, duration: 0.8, stagger: 0.07 }, 0.15)
           .from(card.current, { rotateY: -40, rotateZ: -8, x: 80, y: 20, opacity: 0, duration: 1.2, transformPerspective: 900 }, 0);
       });
     },
@@ -131,11 +131,13 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
   );
 
   // Parallax as the hero scrolls away: copy sinks and fades, the gradient
-  // swells, the poster rises at its own pace. Tied to scroll position (scrub).
+  // swells, the poster rises at its own pace. Tied to scroll position; Lenis
+  // already smooths the scroll, so scrub follows it directly (scrub: true)
+  // instead of adding a second, lagging smoothing pass.
   useGSAP(
     () => {
       gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
-        const scrollTrigger = { trigger: root.current, start: "top top", end: "bottom top", scrub: 0.6 };
+        const scrollTrigger = { trigger: root.current, start: "top top", end: "bottom top", scrub: true };
         gsap.to("[data-parallax-copy]", { yPercent: 22, opacity: 0.25, ease: "none", scrollTrigger });
         gsap.to("[data-parallax-bg]", { scale: 1.15, yPercent: 10, ease: "none", scrollTrigger });
         gsap.to("[data-parallax-card]", { yPercent: -30, ease: "none", scrollTrigger });
@@ -182,11 +184,8 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
     <section ref={root} className="relative -mt-16 overflow-hidden rounded-b-[40px] text-[var(--game-ink)] sm:rounded-b-[56px]">
       {/* CSS gradient underneath: the whole background on phones, and on desktops
           while WebGL starts or when it is unavailable. */}
-      <div
-        className="absolute inset-0 bg-[radial-gradient(60%_45%_at_18%_12%,color-mix(in_oklab,var(--game)_55%,white)_0%,transparent_70%),radial-gradient(70%_60%_at_90%_80%,var(--game-deep)_0%,transparent_75%),linear-gradient(140deg,var(--game),var(--game-deep))]"
-        aria-hidden
-      />
-      <div data-parallax-bg className="absolute inset-0" aria-hidden>
+      <Backdrop theme={theme} />
+      <div data-parallax-bg className="absolute inset-0 will-change-transform" aria-hidden>
         {richBackground ? (
           <Suspense fallback={null}>
             <Grainient
@@ -207,7 +206,7 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
       </div>
       {lightInk ? <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_45%,rgb(0_0_0/0.12))]" aria-hidden /> : null}
       <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-32 pt-28 sm:px-6 sm:pb-36 sm:pt-32 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center lg:grid-cols-[minmax(0,1fr)_19rem]">
-        <div data-parallax-copy className="min-w-0">
+        <div data-parallax-copy className="min-w-0 will-change-[transform,opacity]">
           <GamePicker games={games} active={game?.slug ?? null} />
           <div className="mt-8 min-h-[11rem]">
             {game ? (
@@ -260,8 +259,8 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
           </div>
         </div>
         {game ? (
-          <div data-parallax-card className="relative hidden md:block">
-          <div data-float>
+          <div data-parallax-card className="relative hidden will-change-transform md:block">
+          <div data-float className="will-change-transform">
             <div ref={card} className="relative mx-auto w-[16rem] rotate-[4deg] lg:w-[19rem]" style={{ transformStyle: "preserve-3d" }}>
               <div className="absolute -inset-6 rounded-[40px] bg-[var(--game-ink)] opacity-20 blur-3xl" aria-hidden />
               <Poster slug={game.slug} name={game.name} image={game.image} className="rounded-[28px] shadow-[0_40px_70px_-24px_rgb(0_0_0/0.55)] ring-4 ring-white/25" />
@@ -274,15 +273,48 @@ function Hero({ theme, game, games, latest, loading }: { theme: GameTheme; game:
   );
 }
 
+/**
+ * The hero's colour, crossfaded when the game changes: the new game's gradient
+ * fades in over the old one with GSAP (opacity only, its own layer), then the
+ * old layer is dropped. Cheap at any size, unlike tweening the colours.
+ */
+function Backdrop({ theme }: { theme: GameTheme }) {
+  const root = useRef<HTMLDivElement>(null);
+  const [layers, setLayers] = useState(() => [{ id: 0, theme }]);
+  const nextId = useRef(1);
+  useEffect(() => {
+    setLayers((ls) => (ls[ls.length - 1]!.theme.color === theme.color ? ls : [...ls, { id: nextId.current++, theme }]));
+  }, [theme]);
+  useGSAP(
+    () => {
+      const top = root.current?.lastElementChild;
+      if (layers.length < 2 || !top) return;
+      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      gsap.fromTo(top, { opacity: 0 }, { opacity: 1, duration: still ? 0 : 0.8, ease: "power2.inOut", onComplete: () => setLayers((ls) => ls.slice(-1)) });
+    },
+    { scope: root, dependencies: [layers.length] },
+  );
+  return (
+    <div ref={root} className="absolute inset-0" aria-hidden>
+      {layers.map((l) => (
+        <div key={l.id} className="absolute inset-0 will-change-[opacity]" style={{ background: heroGradient(l.theme) }} />
+      ))}
+    </div>
+  );
+}
+
+// No backdrop-blur here: the chips ride the scroll parallax, and a blurred
+// backdrop is re-rendered on every frame it moves. Over a smooth gradient a
+// tinted fill looks the same.
 function Chip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_oklab,var(--game-ink)_22%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_14%,transparent)] px-3 py-1.5 text-[13px] font-semibold backdrop-blur-md">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_oklab,var(--game-ink)_22%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_16%,transparent)] px-3 py-1.5 text-[13px] font-semibold">
       {children}
     </span>
   );
 }
 
-/** Posters for every game in a glass tray; the active one rises. */
+/** Posters for every game in a tinted tray; the active one rises. */
 function GamePicker({ games, active }: { games: GameSummary[]; active: string | null }) {
   const root = useRef<HTMLUListElement>(null);
   useGSAP(
@@ -293,12 +325,27 @@ function GamePicker({ games, active }: { games: GameSummary[]; active: string | 
     },
     { scope: root, dependencies: [games.length] },
   );
+  // The active game's card rises and brightens; the one it replaces settles back.
+  useGSAP(
+    () => {
+      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      gsap.utils.toArray<HTMLElement>("[data-pick-card]").forEach((el) => {
+        const on = el.getAttribute("aria-current") === "page";
+        const d = still ? 0 : 0.6;
+        gsap.to(el, { y: on ? -4 : 0, duration: d, ease: "expo.out", overwrite: "auto" });
+        // Clear any hover lift and fade the poster to its resting brightness.
+        const poster = el.querySelector("[data-lift-target]");
+        if (poster) gsap.to(poster, { ...(on ? { y: 0 } : {}), opacity: on ? 1 : 0.7, duration: d, ease: "power2.out", overwrite: "auto" });
+      });
+    },
+    { scope: root, dependencies: [active, games.length] },
+  );
   if (games.length === 0) return <div className="h-[7.5rem]" />;
   return (
     <nav aria-label="Pilih game">
       <ul
         ref={root}
-        className="flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[26px] [mask-image:linear-gradient(90deg,#000_calc(100%-2.5rem),transparent)] pr-8 border border-[color-mix(in_oklab,var(--game-ink)_18%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_10%,transparent)] p-2 backdrop-blur-md [scrollbar-width:none]"
+        className="flex w-fit max-w-full gap-1.5 overflow-x-auto rounded-[26px] [mask-image:linear-gradient(90deg,#000_calc(100%-2.5rem),transparent)] pr-8 border border-[color-mix(in_oklab,var(--game-ink)_18%,transparent)] bg-[color-mix(in_oklab,var(--game-ink)_12%,transparent)] p-2 [scrollbar-width:none]"
       >
         {games.map((g) => {
           const on = g.slug === active;
@@ -306,13 +353,17 @@ function GamePicker({ games, active }: { games: GameSummary[]; active: string | 
             <li key={g.slug} data-pick className="shrink-0">
               <Link
                 to={`/game/${g.slug}`}
+                data-pick-card
+                data-lift={on ? undefined : "3"}
                 aria-current={on ? "page" : undefined}
                 aria-label={`${g.name}${g.startingPrice !== null ? `, mulai ${idr(g.startingPrice)}` : ""}`}
-                className={`group block w-[4.5rem] rounded-[18px] p-1 transition-[transform,background-color] duration-500 ease-[var(--ease-out)] sm:w-[5.25rem] ${
-                  on ? "-translate-y-1 bg-[color-mix(in_oklab,var(--game-ink)_22%,transparent)]" : "hover:-translate-y-0.5"
-                }`}
+                className={`block w-[4.5rem] rounded-[18px] p-1 sm:w-[5.25rem] ${on ? "bg-[color-mix(in_oklab,var(--game-ink)_22%,transparent)]" : ""}`}
               >
-                <span className={`block overflow-hidden rounded-[14px] transition-opacity duration-300 ${on ? "shadow-[0_12px_24px_-10px_rgb(0_0_0/0.55)]" : "opacity-70 group-hover:opacity-100"}`}>
+                <span
+                  data-lift-target
+                  data-lift-fade={on ? undefined : "0.7"}
+                  className={`block overflow-hidden rounded-[14px] ${on ? "shadow-[0_12px_24px_-10px_rgb(0_0_0/0.55)]" : "opacity-70"}`}
+                >
                   <Poster slug={g.slug} name={g.name} image={g.image} />
                 </span>
                 <span className={`mt-1 block truncate text-center text-[10.5px] font-bold ${on ? "" : "opacity-75"}`}>
@@ -592,10 +643,50 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
     { scope: grid, dependencies: [tab, open] },
   );
 
+  // The active tab's pill slides to the tab (GSAP), instead of each tab
+  // switching its own background.
+  const placed = useRef(false);
+  useGSAP(
+    () => {
+      const pill = grid.current?.querySelector<HTMLElement>("[data-tab-pill]");
+      const on = grid.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!pill || !on) return;
+      const instant = !placed.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      placed.current = true;
+      gsap.to(pill, { x: on.offsetLeft, width: on.offsetWidth, duration: instant ? 0 : 0.55, ease: "expo.out", overwrite: "auto" });
+    },
+    { scope: grid, dependencies: [tab, tabs.length] },
+  );
+
+  // A newly chosen denomination pops into place.
+  const chosen = useRef(selected);
+  useGSAP(
+    () => {
+      if (chosen.current === selected) return;
+      chosen.current = selected;
+      const tile = grid.current?.querySelector('[role="radio"][aria-checked="true"]');
+      if (!tile) return;
+      motionOK(() => {
+        gsap.fromTo(tile, { scale: 0.94 }, { scale: 1, duration: 0.6, ease: "back.out(2.6)", overwrite: "auto" });
+      });
+    },
+    { scope: grid, dependencies: [selected] },
+  );
+
+  // The caret on "show all" turns with the list.
+  useGSAP(
+    () => {
+      const caret = grid.current?.querySelector("[data-caret]");
+      if (caret) gsap.to(caret, { rotate: open ? 180 : 0, duration: 0.45, ease: "power3.inOut" });
+    },
+    { scope: grid, dependencies: [open] },
+  );
+
   return (
     <div ref={grid}>
       {tabs.length > 1 ? (
-        <div role="tablist" aria-label="Kategori" className="-mx-1 mb-4 flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
+        <div role="tablist" aria-label="Kategori" className="relative -mx-1 mb-4 flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
+          <span data-tab-pill aria-hidden className="absolute left-0 top-1 h-9 rounded-full bg-surface shadow-[0_2px_8px_-3px_rgb(0_0_0/0.25)]" />
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -606,7 +697,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
                 setTab(t.id);
                 setOpen(false);
               }}
-              className={`press h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors ${t.id === tab ? "bg-surface text-ink shadow-[0_2px_8px_-3px_rgb(0_0_0/0.25)]" : "text-ink-3 hover:text-ink"}`}
+              className={`press relative z-10 h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold ${t.id === tab ? "text-ink" : "text-ink-3 hover:text-ink"}`}
             >
               {t.label} <span className="ml-1 text-xs font-medium text-ink-3">{t.items.length}</span>
             </button>
@@ -627,11 +718,13 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
                 aria-label={`${name}, ${p.available ? idr(p.price) : "habis"}`}
                 disabled={!p.available}
                 data-tile
+                data-press
+                data-lift={on || !p.available ? undefined : "3"}
                 onClick={() => onSelect(p.code)}
-                className={`group relative flex min-h-[7.25rem] flex-col rounded-[20px] p-3.5 text-left text-ink transition-[transform,background-color,box-shadow] duration-300 ease-[var(--ease-out)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 ${
+                className={`group relative flex min-h-[7.25rem] flex-col rounded-[20px] p-3.5 text-left text-ink disabled:cursor-not-allowed disabled:opacity-45 ${
                   on
                     ? "bg-[color-mix(in_oklab,var(--game)_13%,var(--surface))] shadow-[inset_0_0_0_2px_var(--game),0_14px_30px_-16px_var(--game)]"
-                    : "bg-surface-2/70 hover:-translate-y-0.5 hover:bg-surface hover:shadow-[0_14px_30px_-18px_rgb(0_0_0/0.35),inset_0_0_0_1px_var(--line)]"
+                    : "bg-surface-2/70 hover:bg-surface hover:shadow-[inset_0_0_0_1px_var(--line)]"
                 }`}
               >
                 {o.kind === "amount" ? (
@@ -670,7 +763,7 @@ function Denominations({ game, theme, selected, onSelect }: { game: GameSummary;
           aria-expanded={open}
         >
           {open ? "Tampilkan lebih sedikit" : `Tampilkan semua ${items.length} nominal`}
-          <CaretDown size={14} weight="bold" className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`} aria-hidden />
+          <CaretDown data-caret size={14} weight="bold" aria-hidden />
         </button>
       ) : null}
     </div>
@@ -711,7 +804,7 @@ function PayButton({ loading, className = "", short }: { loading: boolean; class
       type="submit"
       disabled={loading}
       aria-busy={loading || undefined}
-      className={`press inline-flex h-[3.25rem] items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[linear-gradient(135deg,var(--game),color-mix(in_oklab,var(--game)_70%,var(--game-deep)))] px-6 font-bold text-[var(--game-ink)] shadow-[0_14px_30px_-12px_var(--game)] transition-[filter,box-shadow] hover:brightness-110 hover:shadow-[0_18px_36px_-12px_var(--game)] disabled:cursor-wait disabled:opacity-70 ${className}`}
+      className={`press inline-flex h-[3.25rem] items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[linear-gradient(135deg,var(--game),color-mix(in_oklab,var(--game)_70%,var(--game-deep)))] px-6 font-bold text-[var(--game-ink)] shadow-[0_14px_30px_-12px_var(--game)] hover:brightness-110 disabled:cursor-wait disabled:opacity-70 ${className}`}
     >
       {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none" aria-hidden /> : <QrCode size={20} weight="bold" aria-hidden />}
       {short ? "Bayar QRIS" : "Bayar dengan QRIS"}
@@ -881,7 +974,7 @@ function AllGames({ games, active }: { games: GameSummary[]; active: string | nu
       gsap.matchMedia().add("(prefers-reduced-motion: no-preference) and (min-width: 768px)", () => {
         gsap.utils.toArray<HTMLElement>("[data-drift]").forEach((el, i) => {
           const dir = i % 2 === 0 ? 1 : -1;
-          gsap.fromTo(el, { y: 26 * dir }, { y: -26 * dir, ease: "none", scrollTrigger: { trigger: grid.current, start: "top bottom", end: "bottom top", scrub: 0.8 } });
+          gsap.fromTo(el, { y: 26 * dir }, { y: -26 * dir, ease: "none", scrollTrigger: { trigger: grid.current, start: "top bottom", end: "bottom top", scrub: true } });
         });
       });
     },
@@ -910,15 +1003,16 @@ function AllGames({ games, active }: { games: GameSummary[]; active: string | nu
           const on = g.slug === active;
           const t = themeFor(g.slug);
           return (
-            <li key={g.slug} data-drift>
+            <li key={g.slug} data-drift className="md:will-change-transform">
               <AnimatedContent delay={(i % 6) * 0.05} distance={28} className="h-full">
                 <Link
                   to={`/game/${g.slug}`}
                   aria-current={on ? "page" : undefined}
-                  className={`group block h-full rounded-[22px] bg-surface p-2 shadow-raised ring-1 transition-transform duration-500 ease-[var(--ease-out)] hover:-translate-y-1 ${on ? "ring-2 ring-[var(--game)]" : "ring-line"} ${g.productCount === 0 ? "opacity-60" : ""}`}
+                  data-lift="6"
+                  className={`block h-full rounded-[22px] bg-surface p-2 shadow-raised ring-1 ${on ? "ring-2 ring-[var(--game)]" : "ring-line"} ${g.productCount === 0 ? "opacity-60" : ""}`}
                 >
                   <span className="block overflow-hidden rounded-[16px]">
-                    <span className="block transition-transform duration-700 ease-[var(--ease-out)] group-hover:scale-[1.05]">
+                    <span data-lift-zoom className="block">
                       <Poster slug={g.slug} name={g.name} image={g.image} />
                     </span>
                   </span>
@@ -963,7 +1057,7 @@ function HowItWorks() {
   useGSAP(
     () => {
       gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
-        gsap.fromTo("[data-num]", { yPercent: 60 }, { yPercent: -60, ease: "none", scrollTrigger: { trigger: root.current, start: "top bottom", end: "bottom top", scrub: 0.6 } });
+        gsap.fromTo("[data-num]", { yPercent: 60 }, { yPercent: -60, ease: "none", scrollTrigger: { trigger: root.current, start: "top bottom", end: "bottom top", scrub: true } });
       });
     },
     { scope: root },
@@ -985,7 +1079,7 @@ function HowItWorks() {
                   <span className="grid size-11 place-items-center rounded-2xl bg-[color-mix(in_oklab,var(--game)_14%,var(--surface))] text-[var(--game)]">
                     <Icon size={22} weight="fill" aria-hidden />
                   </span>
-                  <span data-num className="text-4xl font-extrabold tabular text-ink/10" aria-hidden>
+                  <span data-num className="text-4xl font-extrabold tabular text-ink/10 will-change-transform" aria-hidden>
                     0{i + 1}
                   </span>
                 </div>
@@ -1024,19 +1118,36 @@ function Faq() {
       <div className="grid gap-2.5">
         {FAQ.map(([q, a], i) => (
           <AnimatedContent key={q} delay={i * 0.06} distance={24}>
-            <details className="group rounded-[22px] bg-surface px-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-line open:shadow-raised">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 font-semibold [&::-webkit-details-marker]:hidden">
-                {q}
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-ink-3 transition-transform duration-300 group-open:rotate-180">
-                  <CaretDown size={14} weight="bold" aria-hidden />
-                </span>
-              </summary>
-              <p className="pb-5 pr-10 text-sm leading-relaxed text-ink-2">{a}</p>
-            </details>
+            <FaqItem q={q} a={a} />
           </AnimatedContent>
         ))}
       </div>
     </section>
+  );
+}
+
+/** One question. Opening turns the caret and lets the answer settle in (GSAP, transform and opacity only). */
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const root = useRef<HTMLDetailsElement>(null);
+  const { contextSafe } = useGSAP({ scope: root });
+  const toggle = contextSafe(() => {
+    const open = root.current?.open ?? false;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    gsap.to("[data-faq-caret]", { rotate: open ? 180 : 0, duration: still ? 0 : 0.45, ease: "power3.inOut" });
+    if (open && !still) gsap.from("[data-faq-answer]", { opacity: 0, y: -8, duration: 0.45, ease: "power3.out" });
+  });
+  return (
+    <details ref={root} onToggle={toggle} className="rounded-[22px] bg-surface px-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-line open:shadow-raised">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 font-semibold [&::-webkit-details-marker]:hidden">
+        {q}
+        <span data-faq-caret className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-ink-3">
+          <CaretDown size={14} weight="bold" aria-hidden />
+        </span>
+      </summary>
+      <p data-faq-answer className="pb-5 pr-10 text-sm leading-relaxed text-ink-2">
+        {a}
+      </p>
+    </details>
   );
 }
 
